@@ -1,0 +1,70 @@
+PRD - 에니어그램 성향 분석 어플
+
+1. 홈(대시보드) 구조 & 단계별 활성화
+로그인 후 진입하는 홈 화면에 3개의 카드/버튼을 배치합니다.
+1) 사전 설문 - 초기 상태: Enabled
+2) 본 설문 - 초기 상태: Disabled (사전 설문 완료 후 활성화)
+3) 결과 리포트 - 초기 상태: Disabled (본 설문 완료 후 활성화)
+
+2. 중단 후 재개(Resume)
+- 응답 시 자동 저장(디바운스 1~2초)
+- 현재 페이지, 세트, 문항 인덱스, RNG 시드 저장
+- 재진입 시 '이어하기' 버튼으로 복원
+- 시드 고정으로 랜덤 문항 유지
+
+3. 상태 모델
+NOT_STARTED → IN_PROGRESS → COMPLETED
+전이 규칙:
+- 본 설문은 사전 설문 완료 후 가능
+- 결과 리포트는 본 설문 완료 후 가능
+
+4. 데이터 구조
+UserProgress {
+  user_id: string,
+  pre_survey: { status, answered_count, total_count, last_pointer },
+  main_survey: { status, sets, total_sets },
+  report: { status, report_id }
+}
+
+SurveyResponse {
+  user_id: string,
+  survey_type: "PRE" | "MAIN",
+  answers: [{ q_id, value, ts }],
+  meta: { seed, set_id },
+  status: "IN_PROGRESS" | "COMPLETED"
+}
+
+5. API 설계
+GET /me/progress
+PATCH /surveys/pre/answers
+POST /surveys/pre/complete
+POST /surveys/main/session
+PATCH /surveys/main/answers
+POST /surveys/main/complete
+POST /report/generate
+GET /report/latest
+
+6. UI/UX
+- 홈: 3단계 카드 + 상태 표시 + 진행률 바
+- 설문: Likert 1~6 선택, 첨부 UI와 동일
+- 리포트: 유형 + 특징 + 직업 추천 3개 표시
+
+7. 기술 스택
+Frontend: React(Next.js) + TailwindCSS
+Backend: Node.js(Express) or Firebase Functions
+DB: Firebase Firestore or Supabase
+Auth: Firebase Authentication
+AI: OpenAI GPT-4 API
+Hosting: Vercel or Firebase Hosting
+
+8. 테스트 시나리오
+1) 사전 설문 중단 후 재개
+2) 사전 설문 완료 전 본 설문 비활성
+3) 본 설문 중단 후 재개 시 동일 문항 유지
+4) 본 설문 완료 전 리포트 비활성
+5) 리포트 생성 후 최신 리포트 확인 가능
+
+9. 확장 기능 (Optional)
+- 결과 리포트 공유
+- 과거 결과 재조회
+- 사용자 통계 대시보드

@@ -1,0 +1,145 @@
+"use client";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { PRE_QUESTIONS } from "@/data/questions";
+import { getPreQuestionsFromStorage } from "@/lib/dynamic-questions";
+import { RadioOptions } from "@/components/RadioOptions";
+import { apiCompletePre, apiPatchPreAnswers } from "@/lib/api";
+import { useProgress } from "@/lib/progress-context";
+
+export default function PreSurveyPage() {
+  const router = useRouter();
+  const { userId, progress, reload } = useProgress();
+  const [answers, setAnswers] = useState<Record<string, string | null>>({});
+  const saveTimer = useRef<number | null>(null);
+
+  const preList = getPreQuestionsFromStorage(PRE_QUESTIONS);
+
+  useEffect(() => {
+    // Load existing answers from localStorage
+    if (typeof window === 'undefined') return;
+    
+    const surveyKey = `survey.pre.v1:${userId}`;
+    const existingSurvey = localStorage.getItem(surveyKey);
+    
+    if (existingSurvey) {
+      try {
+        const parsed = JSON.parse(existingSurvey);
+        console.log('Loading existing pre-survey:', parsed);
+        
+        if (parsed.answers && Array.isArray(parsed.answers)) {
+          const loadedAnswers: Record<string, string | null> = {};
+          
+          parsed.answers.forEach((answer: any) => {
+            const question = preList.find(q => q.id === answer.q_id);
+            if (question && question.options) {
+              // Convert value (1-based index) back to option text
+              const optionIndex = parseInt(answer.value) - 1;
+              if (optionIndex >= 0 && optionIndex < question.options.length) {
+                const optionText = question.options[optionIndex];
+                loadedAnswers[answer.q_id] = optionText ? optionText.trim() : null;
+              }
+            }
+          });
+          
+          console.log('Loaded answers:', loadedAnswers);
+          setAnswers(loadedAnswers);
+        }
+      } catch (error) {
+        console.error('Error loading existing pre-survey:', error);
+      }
+    }
+  }, [userId, preList]);
+
+  const validAnswerCount = Object.keys(answers).filter(id => answers[id] !== null).length;
+  const pct = Math.round((validAnswerCount / preList.length) * 100);
+
+  const onSelect = (qId: string, value: string | null) => {
+    console.log(`onSelect called: qId=${qId}, value=${value}`);
+    
+    // Use functional update to avoid state race conditions
+    setAnswers(prev => {
+      let next: Record<string, string | null>;
+      
+      if (value === null) {
+        // Deselect
+        console.log('Deselecting answer for:', qId);
+        next = { ...prev };
+        delete next[qId];
+      } else {
+        // Select or change
+        console.log('Selecting value for:', qId);
+        next = { ...prev, [qId]: value };
+      }
+      
+      console.log('Updated answers count:', Object.keys(next).filter(k => next[k] !== null).length);
+      
+      // Trigger save with updated state
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+      saveTimer.current = window.setTimeout(async () => {
+        const payload = preList
+          .map((q) => {
+            const selected = next[q.id];
+            
+            if (!selected || selected === null) {
+              return null;
+            }
+            
+            const normalizedSelected = String(selected).trim();
+            const opts = (q.options ?? []).map(o => String(o).trim());
+            const idx = opts.indexOf(normalizedSelected);
+            
+            if (idx === -1) {
+              console.warn(`Question ${q.id}: selected "${normalizedSelected}" not found in options`, opts);
+              return null;
+            }
+            
+            return { q_id: q.id, value: idx + 1, ts: Date.now() };
+          })
+          .filter((a): a is { q_id: string; value: number; ts: number } => a !== null);
+        
+        console.log('Saving pre-survey answers:');
+        console.log('Total questions:', preList.length);
+        console.log('Valid answers to save:', payload.length);
+        console.log('Payload:', payload);
+        
+        await apiPatchPreAnswers(userId, payload, { page: 0, index: 0 });
+        // Don't reload on every save - only reload on complete
+      }, 800);
+      
+      return next;
+    });
+  };
+
+  const onComplete = async () => {
+    await apiCompletePre(userId);
+    await reload();
+    router.push("/");
+  };
+
+  return (
+    <div className="flex flex-col gap-6">
+      <button className="btn btn-outline w-fit" onClick={() => router.back()}>← 홈</button>
+      <h2 className="text-xl font-semibold">사전 설문</h2>
+      <div className="card p-6 flex flex-col gap-6">
+        {preList.map((q) => (
+          <div key={q.id} className="flex flex-col gap-3">
+            <div className="text-slate-800 font-medium">{q.text}</div>
+            <RadioOptions
+              name={q.id}
+              options={q.options ?? ["예", "아니오"]}
+              selected={answers[q.id] ?? null}
+              onSelect={(val) => onSelect(q.id, val)}
+            />
+          </div>
+        ))}
+        <div className="flex items-center justify-between text-sm text-slate-500">
+          <span>완료율: {pct}% ({validAnswerCount}/{preList.length})</span>
+          <button className="btn btn-primary" onClick={onComplete} disabled={validAnswerCount < preList.length}>완료</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
