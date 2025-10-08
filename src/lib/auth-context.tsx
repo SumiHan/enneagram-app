@@ -55,6 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadUserProfile = async (supabaseUser: SupabaseUser) => {
     try {
+      console.log('Loading user profile for:', supabaseUser.id, supabaseUser.email);
+      
       // Get user profile from users table
       const { data, error } = await supabase
         .from('users')
@@ -62,7 +64,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('id', supabaseUser.id)
         .single();
 
-      if (error) throw error;
+      console.log('User profile data:', data);
+      console.log('User profile error:', error);
+
+      if (error) {
+        console.error('Error fetching user profile:', error);
+        // If user not found in users table, create it
+        if (error.code === 'PGRST116') {
+          console.log('User not found in users table, creating...');
+          const role = resolveRole(supabaseUser.email || '');
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert({
+              id: supabaseUser.id,
+              email: supabaseUser.email || '',
+              name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'User',
+              password_hash: 'supabase_managed',
+              role,
+            });
+          
+          if (insertError) {
+            console.error('Error creating user profile:', insertError);
+          } else {
+            // Retry loading
+            const { data: retryData } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', supabaseUser.id)
+              .single();
+            
+            if (retryData) {
+              const appUser: AppUser = {
+                uid: retryData.id,
+                email: retryData.email,
+                name: retryData.name,
+                role: retryData.role as Role,
+              };
+              setUser(appUser);
+              setLoading(false);
+              return;
+            }
+          }
+        }
+        throw error;
+      }
 
       if (data) {
         const appUser: AppUser = {
@@ -71,10 +116,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           name: data.name,
           role: data.role as Role,
         };
+        console.log('Setting user:', appUser);
         setUser(appUser);
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
+      setUser(null);
     } finally {
       setLoading(false);
     }

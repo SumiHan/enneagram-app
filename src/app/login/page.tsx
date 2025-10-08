@@ -16,14 +16,16 @@ export default function LoginPage() {
     try {
       setSuggestSignup(false);
       await login(email, password);
-      const raw = typeof window !== "undefined" ? window.localStorage.getItem("auth.email.user.v1") : null;
-      const current = raw ? JSON.parse(raw) : null;
-      const to = current?.role === "admin" ? "/admin/dashboard" : "/";
-      router.replace(to);
+      
+      // Wait a bit for auth state to update
+      setTimeout(() => {
+        // Will be redirected by useEffect in page.tsx based on user role
+        router.replace('/');
+      }, 500);
     } catch (e: any) {
       const msg = e?.message ?? "로그인 실패";
       setError(msg);
-      if (msg.includes("올바르지 않습니다") || msg.includes("존재")) {
+      if (msg.includes("올바르지 않습니다") || msg.includes("존재") || msg.includes("Invalid")) {
         setSuggestSignup(true);
       }
     }
