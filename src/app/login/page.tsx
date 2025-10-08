@@ -11,6 +11,26 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [suggestSignup, setSuggestSignup] = useState(false);
 
+  // Redirect if already logged in
+  React.useEffect(() => {
+    if (!loading && user) {
+      console.log('Already logged in, redirecting...');
+      const to = user.role === "admin" ? "/admin/dashboard" : "/";
+      router.replace(to);
+    }
+  }, [user, loading, router]);
+
+  // Show loading while checking auth
+  if (loading) {
+    return (
+      <div className="max-w-md mx-auto">
+        <div className="card p-6 text-center text-slate-600">
+          로딩 중...
+        </div>
+      </div>
+    );
+  }
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {

@@ -13,14 +13,27 @@ export default function HomePage() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !user) {
+    // Wait for auth to load
+    if (authLoading) {
+      console.log('Auth loading...');
+      return;
+    }
+    
+    console.log('Auth loaded, user:', user);
+    
+    if (!user) {
+      console.log('No user, redirecting to login');
       router.replace("/login");
       return;
     }
-    if (!authLoading && user?.role === "admin") {
+    
+    if (user.role === "admin") {
+      console.log('Admin user, redirecting to dashboard');
       router.replace("/admin/dashboard");
       return;
     }
+    
+    console.log('Regular user, loading progress');
     // ensure progress loaded
     if (!progress) reload();
     setHydrated(true);
@@ -28,6 +41,20 @@ export default function HomePage() {
 
   const prePct = progress ? Math.round((progress.pre_survey.answered_count / progress.pre_survey.total_count) * 100) : 0;
   const mainPct = progress ? Math.round((progress.main_survey.sets / progress.main_survey.total_sets) * 100) : 0;
+
+  // Show loading state
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="text-slate-600">로딩 중...</div>
+      </div>
+    );
+  }
+
+  // Don't render if not hydrated
+  if (!hydrated) {
+    return null;
+  }
 
   return (
     <div className="flex flex-col gap-5">
