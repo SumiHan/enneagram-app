@@ -2,17 +2,14 @@
 
 -- auth.users 테이블의 모든 사용자 이메일 확인 처리
 UPDATE auth.users 
-SET 
-  email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
-  confirmed_at = COALESCE(confirmed_at, NOW())
-WHERE email_confirmed_at IS NULL OR confirmed_at IS NULL;
+SET email_confirmed_at = COALESCE(email_confirmed_at, NOW())
+WHERE email_confirmed_at IS NULL;
 
 -- 확인: 모든 사용자 조회
 SELECT 
   id,
   email,
   email_confirmed_at,
-  confirmed_at,
   created_at
 FROM auth.users
 ORDER BY created_at DESC;
