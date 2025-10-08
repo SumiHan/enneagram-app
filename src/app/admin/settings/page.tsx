@@ -23,6 +23,7 @@ export default function AdminSettingsPage() {
   const loadUsers = async () => {
     try {
       setLoading(true);
+      // Load ALL users (admin + user)
       const { data, error } = await supabase
         .from('users')
         .select('id, email, name, role')
@@ -30,6 +31,7 @@ export default function AdminSettingsPage() {
       
       if (error) throw error;
       setUsers(data || []);
+      console.log('Loaded all users:', data?.length);
     } catch (error) {
       console.error('Error loading users:', error);
     } finally {

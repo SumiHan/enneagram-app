@@ -52,22 +52,19 @@ export default function AdminResponsesPage() {
       setPreQuestions(preQ);
       setMainQuestions(mainQ);
       
-      // Get admin emails
-      const adminEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS?.split(',').map(e => e.trim()) || [];
-      
-      // Load all users (excluding admins)
+      // Load only users with role='user' (exclude admins)
       const { data: usersData, error: usersError } = await supabase
         .from('users')
         .select('id, email, name, role')
-        .eq('role', 'user');
+        .eq('role', 'user'); // Only load users with role='user'
       
       if (usersError) throw usersError;
+      
+      console.log('Loaded user-role users for responses:', usersData?.length);
       
       const userRecords: UserRecord[] = [];
       
       for (const userData of usersData || []) {
-        // Skip admin users
-        if (adminEmails.includes(userData.email)) continue;
         
         // Load progress
         const { data: progressData } = await supabase
