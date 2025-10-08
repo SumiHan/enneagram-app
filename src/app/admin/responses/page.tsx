@@ -2,507 +2,448 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
-import { getLocalStorage } from "@/lib/storage";
+import { supabase } from "@/lib/supabase";
 import { getPreQuestionsFromStorage, getMainQuestionsFromStorage } from "@/lib/dynamic-questions";
-import type { SurveyResponse, SurveyAnswer, QuestionItem } from "@/lib/types";
+import type { SurveyAnswer, QuestionItem } from "@/lib/types";
 import * as XLSX from 'xlsx';
 
-type Progress = any;
+type UserRecord = {
+  userId: string;
+  email: string;
+  name: string;
+  preStatus: string;
+  preAnsweredCount: number;
+  preTotalCount: number;
+  mainStatus: string;
+  mainAnsweredCount: number;
+  mainTotalCount: number;
+  reportStatus: string;
+  preAnswers: SurveyAnswer[];
+  mainAnswers: SurveyAnswer[];
+  reportData: any;
+};
 
 export default function AdminResponsesPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const [records, setRecords] = useState<Array<{ email: string; progress: Progress; preAnswers?: SurveyResponse | null; mainAnswers?: SurveyResponse | null; reportData?: any }>>([]);
+  const [records, setRecords] = useState<UserRecord[]>([]);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [preQuestions, setPreQuestions] = useState<QuestionItem[]>([]);
   const [mainQuestions, setMainQuestions] = useState<QuestionItem[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'pre' | 'main' | 'report'>('pre');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user?.role !== "admin") {
       router.replace("/");
       return;
     }
-    // scan localStorage for progress keys
-    if (typeof window === "undefined") return;
-    const out: Array<{ email: string; progress: Progress; preAnswers?: SurveyResponse | null; mainAnswers?: SurveyResponse | null; reportData?: any }> = [];
-    
-    // Get admin emails from environment variable
-    const adminEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS?.split(',') || [];
-    
-    for (let i = 0; i < window.localStorage.length; i++) {
-      const key = window.localStorage.key(i)!;
-      const m = key.match(/^progress\.v1:(.+)$/);
-      if (m) {
-        const email = m[1];
-        
-        // Skip admin users
-        if (adminEmails.includes(email)) {
-          continue;
-        }
-        
-        try {
-          const progress = JSON.parse(window.localStorage.getItem(key) || "null");
-          const preAnswers = getLocalStorage<SurveyResponse | null>(`survey.pre.v1:${email}`, null);
-          const mainAnswers = getLocalStorage<SurveyResponse | null>(`survey.main.v1:${email}`, null);
-          const reportData = getLocalStorage<any>(`report.v1:${email}`, null);
-          out.push({ email, progress, preAnswers, mainAnswers, reportData });
-        } catch {}
-      }
-    }
-    setRecords(out);
-    
-    // Load questions for display
-    const preQuestions = getPreQuestionsFromStorage([]);
-    const mainQuestions = getMainQuestionsFromStorage([]);
-    setPreQuestions(preQuestions);
-    setMainQuestions(mainQuestions);
-    
-    // Debug logging
-    console.log('Pre questions loaded:', preQuestions.length);
-    console.log('Main questions loaded:', mainQuestions.length);
+    loadData();
   }, [user, router]);
 
-  const rows = useMemo(() => {
-    return records.map(({ email, progress, preAnswers, mainAnswers, reportData }) => {
-      const pre = progress?.pre_survey;
-      const main = progress?.main_survey;
-      const report = progress?.report;
-      // Calculate survey progress by actual answered questions
-      const preAnsweredCount = preAnswers?.answers?.length ?? 0;
-      const preTotalCount = preQuestions.length;
-      const mainAnsweredCount = mainAnswers?.answers?.length ?? 0;
-      const mainTotalCount = mainQuestions.length;
+  const loadData = async () => {
+    try {
+      setLoading(true);
       
-      return {
-        email,
-        preStatus: pre?.status ?? "-",
-        preDetail: `${preAnsweredCount} / ${preTotalCount}`,
-        mainStatus: main?.status ?? "-",
-        mainDetail: `${mainAnsweredCount} / ${mainTotalCount} 문항`,
-        reportStatus: report?.status ?? "-",
-        reportData,
-        preAnswers,
-        mainAnswers,
-      };
-    });
-  }, [records, preQuestions, mainQuestions]);
+      // Load questions
+      const preQ = getPreQuestionsFromStorage([]);
+      const mainQ = getMainQuestionsFromStorage([]);
+      setPreQuestions(preQ);
+      setMainQuestions(mainQ);
+      
+      // Get admin emails
+      const adminEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS?.split(',').map(e => e.trim()) || [];
+      
+      // Load all users (excluding admins)
+      const { data: usersData, error: usersError } = await supabase
+        .from('users')
+        .select('id, email, name, role')
+        .eq('role', 'user');
+      
+      if (usersError) throw usersError;
+      
+      const userRecords: UserRecord[] = [];
+      
+      for (const userData of usersData || []) {
+        // Skip admin users
+        if (adminEmails.includes(userData.email)) continue;
+        
+        // Load progress
+        const { data: progressData } = await supabase
+          .from('user_progress')
+          .select('*')
+          .eq('user_id', userData.id)
+          .single();
+        
+        // Load pre-survey answers
+        const { data: preAnswersData } = await supabase
+          .from('survey_answers')
+          .select('*')
+          .eq('user_id', userData.id)
+          .eq('survey_type', 'PRE')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        // Load main survey answers
+        const { data: mainAnswersData } = await supabase
+          .from('survey_answers')
+          .select('*')
+          .eq('user_id', userData.id)
+          .eq('survey_type', 'MAIN')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        // Load report
+        const { data: reportData } = await supabase
+          .from('reports')
+          .select('*')
+          .eq('user_id', userData.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        userRecords.push({
+          userId: userData.id,
+          email: userData.email,
+          name: userData.name || '-',
+          preStatus: progressData?.pre_survey_status || 'NOT_STARTED',
+          preAnsweredCount: preAnswersData?.answers?.length || 0,
+          preTotalCount: preQ.length,
+          mainStatus: progressData?.main_survey_status || 'NOT_STARTED',
+          mainAnsweredCount: mainAnswersData?.answers?.length || 0,
+          mainTotalCount: mainQ.length,
+          reportStatus: progressData?.report_status || 'NOT_STARTED',
+          preAnswers: preAnswersData?.answers || [],
+          mainAnswers: mainAnswersData?.answers || [],
+          reportData: reportData,
+        });
+      }
+      
+      setRecords(userRecords);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const selectedRecord = records.find(r => r.email === selectedUser);
+  const selectedRecord = records.find(r => r.userId === selectedUser);
 
   const getAnswerText = (answer: SurveyAnswer, questions: QuestionItem[]) => {
     const question = questions.find(q => q.id === answer.q_id);
     if (!question) {
-      // 질문을 찾지 못한 경우 더 자세한 정보 표시
       return `${answer.q_id}: ${answer.value} (질문 텍스트 없음)`;
     }
     
     if (question.options && question.options.length > 0) {
-      const optionIndex = parseInt(String(answer.value)) - 1;
-      const optionText = question.options[optionIndex] || answer.value;
-      return `${question.text}: ${optionText}`;
+      const idx = parseInt(String(answer.value)) - 1;
+      const optionText = question.options[idx];
+      return optionText || `선택 ${answer.value}`;
     } else {
       const likertLabels = ["전혀 그렇지 않다", "그렇지 않다", "약간 그렇지 않다", "약간 그렇다", "그렇다", "매우 그렇다"];
-      const likertText = likertLabels[parseInt(String(answer.value)) - 1] || answer.value;
-      return `${question.text}: ${likertText}`;
+      const likertText = likertLabels[parseInt(String(answer.value)) - 1] || String(answer.value);
+      return likertText;
     }
   };
 
-  const toggleUserSelection = (email: string) => {
-    const newSelected = new Set(selectedUsers);
-    if (newSelected.has(email)) {
-      newSelected.delete(email);
+  const toggleUserSelection = (userId: string) => {
+    const newSet = new Set(selectedUsers);
+    if (newSet.has(userId)) {
+      newSet.delete(userId);
     } else {
-      newSelected.add(email);
+      newSet.add(userId);
     }
-    setSelectedUsers(newSelected);
+    setSelectedUsers(newSet);
   };
 
-  const selectAllUsers = () => {
-    setSelectedUsers(new Set(records.map(r => r.email)));
+  const selectAll = () => {
+    setSelectedUsers(new Set(records.map(r => r.userId)));
   };
 
-  const clearSelection = () => {
+  const deselectAll = () => {
     setSelectedUsers(new Set());
   };
 
-  const bulkDeleteUsers = () => {
+  const bulkDelete = async () => {
     if (selectedUsers.size === 0) {
+      alert('삭제할 사용자를 선택하세요.');
       return;
     }
     
-    if (!confirm(`선택한 ${selectedUsers.size}명의 사용자 데이터를 모두 삭제하시겠습니까?`)) {
-      return;
-    }
+    if (!confirm(`${selectedUsers.size}명의 사용자를 삭제하시겠습니까?`)) return;
     
-    // Delete all selected users' data
-    selectedUsers.forEach(email => {
-      window.localStorage.removeItem(`progress.v1:${email}`);
-      window.localStorage.removeItem(`survey.pre.v1:${email}`);
-      window.localStorage.removeItem(`survey.main.v1:${email}`);
-      window.localStorage.removeItem(`report.v1:${email}`);
-      window.localStorage.removeItem(`user.v1:${email}`);
-    });
-    
-    // Refresh records
-    setRecords(records.filter(r => !selectedUsers.has(r.email)));
-    
-    // Clear selection
-    setSelectedUsers(new Set());
-    
-    // Close detail view if it's open for a deleted user
-    if (selectedUser && selectedUsers.has(selectedUser)) {
-      setSelectedUser(null);
+    try {
+      for (const userId of Array.from(selectedUsers)) {
+        // Delete related data
+        await supabase.from('reports').delete().eq('user_id', userId);
+        await supabase.from('survey_answers').delete().eq('user_id', userId);
+        await supabase.from('user_progress').delete().eq('user_id', userId);
+        await supabase.from('users').delete().eq('id', userId);
+      }
+      
+      // Reload data
+      setSelectedUsers(new Set());
+      await loadData();
+      alert('삭제되었습니다.');
+    } catch (error) {
+      console.error('Error deleting users:', error);
+      alert('삭제에 실패했습니다.');
     }
   };
 
-  const exportToExcel = () => {
-    const selectedRecords = records.filter(r => selectedUsers.has(r.email));
-    if (selectedRecords.length === 0) {
-      alert('선택된 사용자가 없습니다.');
+  const downloadExcel = () => {
+    if (selectedUsers.size === 0) {
+      alert('다운로드할 사용자를 선택하세요.');
       return;
     }
 
-    // Create sheet data function
-    const createSheetData = (surveyType: 'pre' | 'main', questions: QuestionItem[]) => {
-      const sheetData = [];
-      
-      // Create headers: 이메일 + 모든 질문 ID
-      const headers = ['이메일', ...questions.map(q => q.id)];
-      sheetData.push(headers);
-      
-      // Create data rows
-      selectedRecords.forEach(record => {
-        const answers = surveyType === 'pre' ? record.preAnswers : record.mainAnswers;
-        const row = [record.email];
-        
-        // For each question, find the answer or leave empty
-        questions.forEach(question => {
-          const answer = answers?.answers.find(a => a.q_id === question.id);
-          if (answer) {
-            if (question.options && question.options.length > 0) {
-              // For pre-survey with options
-              const optionIndex = parseInt(String(answer.value)) - 1;
-              const optionText = question.options[optionIndex] || String(answer.value);
-              row.push(optionText);
-            } else {
-              // For main survey with Likert scale
-              const likertLabels = ["전혀 그렇지 않다", "그렇지 않다", "약간 그렇지 않다", "약간 그렇다", "그렇다", "매우 그렇다"];
-              const likertText = likertLabels[parseInt(String(answer.value)) - 1] || String(answer.value);
-              row.push(likertText);
-            }
-          } else {
-            row.push(''); // No answer
-          }
-        });
-        
-        sheetData.push(row);
+    const selectedRecords = records.filter(r => selectedUsers.has(r.userId));
+
+    // Pre-survey sheet
+    const preHeaders = ['이메일', ...preQuestions.map(q => q.id)];
+    const preRows = selectedRecords.map(r => {
+      const row: any = { '이메일': r.email };
+      preQuestions.forEach(q => {
+        const answer = r.preAnswers.find(a => a.q_id === q.id);
+        row[q.id] = answer ? String(answer.value) : '';
       });
-      
-      return sheetData;
-    };
+      return row;
+    });
 
-    // Create pre-survey sheet
-    const preSurveyData = createSheetData('pre', preQuestions);
-    const mainSurveyData = createSheetData('main', mainQuestions);
+    // Main survey sheet
+    const mainHeaders = ['이메일', ...mainQuestions.map(q => q.id)];
+    const mainRows = selectedRecords.map(r => {
+      const row: any = { '이메일': r.email };
+      mainQuestions.forEach(q => {
+        const answer = r.mainAnswers.find(a => a.q_id === q.id);
+        row[q.id] = answer ? String(answer.value) : '';
+      });
+      return row;
+    });
 
-    // Create a new workbook
-    const workbook = XLSX.utils.book_new();
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    const preWs = XLSX.utils.json_to_sheet(preRows, { header: preHeaders });
+    const mainWs = XLSX.utils.json_to_sheet(mainRows, { header: mainHeaders });
+    XLSX.utils.book_append_sheet(wb, preWs, '사전 설문');
+    XLSX.utils.book_append_sheet(wb, mainWs, '본 설문');
 
-    // Create worksheets
-    const preSurveyWS = XLSX.utils.aoa_to_sheet(preSurveyData);
-    const mainSurveyWS = XLSX.utils.aoa_to_sheet(mainSurveyData);
-
-    // Add worksheets to workbook
-    XLSX.utils.book_append_sheet(workbook, preSurveyWS, '사전 설문');
-    XLSX.utils.book_append_sheet(workbook, mainSurveyWS, '본 설문');
-
-    // Generate Excel file and download
-    const dateStr = new Date().toISOString().split('T')[0];
-    const filename = `설문_응답_${dateStr}.xlsx`;
-    
-    XLSX.writeFile(workbook, filename);
+    // Download
+    XLSX.writeFile(wb, `응답_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">방문자 응답 관리</h2>
+        <div className="card p-6 text-center text-slate-600">
+          로딩 중...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">방문자 응답 관리</h2>
         <div className="flex gap-2">
-          <button className="btn btn-outline" onClick={selectAllUsers}>
-            전체 선택
-          </button>
-          <button className="btn btn-outline" onClick={clearSelection}>
-            선택 해제
-          </button>
-          <button 
-            className="btn btn-primary" 
-            onClick={exportToExcel}
-            disabled={selectedUsers.size === 0}
-          >
-            엑셀 다운로드 ({selectedUsers.size})
-          </button>
-          <button 
-            className="btn bg-red-50 text-red-600 hover:bg-red-100 border-red-200" 
-            onClick={bulkDeleteUsers}
-            disabled={selectedUsers.size === 0}
-          >
-            선택 삭제 ({selectedUsers.size})
-          </button>
+          <button className="btn btn-outline text-sm" onClick={selectAll}>전체 선택</button>
+          <button className="btn btn-outline text-sm" onClick={deselectAll}>선택 해제</button>
+          <button className="btn btn-primary text-sm" onClick={downloadExcel}>엑셀 다운로드</button>
+          <button className="btn btn-outline text-sm text-red-600" onClick={bulkDelete}>선택 삭제</button>
         </div>
       </div>
-      
-      <div className="card p-6">
-        <table className="w-full text-sm border-collapse">
-          <thead className="bg-slate-100">
-            <tr className="text-left text-slate-700 font-semibold">
-              <th className="py-3 px-4 border">선택</th>
-              <th className="py-3 px-4 border">이메일</th>
-              <th className="py-3 px-4 border">사전 설문</th>
-              <th className="py-3 px-4 border">사전 진행</th>
-              <th className="py-3 px-4 border">본 설문</th>
-              <th className="py-3 px-4 border">본 진행</th>
-              <th className="py-3 px-4 border">리포트</th>
-              <th className="py-3 px-4 border">상세보기</th>
+
+      <div className="card p-6 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-slate-600">
+              <th className="py-2 pr-4">
+                <input
+                  type="checkbox"
+                  checked={selectedUsers.size === records.length && records.length > 0}
+                  onChange={(e) => e.target.checked ? selectAll() : deselectAll()}
+                />
+              </th>
+              <th className="py-2 pr-4">이메일</th>
+              <th className="py-2 pr-4">사전 설문</th>
+              <th className="py-2 pr-4">본 설문</th>
+              <th className="py-2 pr-4">리포트</th>
+              <th className="py-2 text-right">액션</th>
             </tr>
           </thead>
-          <tbody className="bg-white">
-            {rows.map((r) => (
-              <tr key={r.email} className="hover:bg-slate-50">
-                <td className="py-3 px-4 border">
+          <tbody>
+            {records.map((r) => (
+              <tr key={r.userId} className="border-t">
+                <td className="py-2 pr-4">
                   <input
                     type="checkbox"
-                    checked={selectedUsers.has(r.email)}
-                    onChange={() => toggleUserSelection(r.email)}
-                    className="checkbox"
+                    checked={selectedUsers.has(r.userId)}
+                    onChange={() => toggleUserSelection(r.userId)}
                   />
                 </td>
-                <td className="py-3 px-4 border font-medium">{r.email}</td>
-                <td className="py-3 px-4 border text-center">{r.preStatus}</td>
-                <td className="py-3 px-4 border text-center">{r.preDetail}</td>
-                <td className="py-3 px-4 border text-center">{r.mainStatus}</td>
-                <td className="py-3 px-4 border text-center">{r.mainDetail}</td>
-                <td className="py-3 px-4 border text-center">{r.reportStatus}</td>
-                <td className="py-3 px-4 border text-center">
-                  <button 
-                    className="btn btn-sm btn-outline"
-                    onClick={() => {
-                      setSelectedUser(r.email);
-                      setActiveTab('pre'); // 기본 탭은 사전 설문
-                    }}
-                  >
-                    보기
+                <td className="py-2 pr-4">{r.email}</td>
+                <td className="py-2 pr-4">
+                  <div className="text-xs">
+                    <div className="font-medium">{r.preStatus}</div>
+                    <div className="text-slate-500">{r.preAnsweredCount} / {r.preTotalCount}</div>
+                  </div>
+                </td>
+                <td className="py-2 pr-4">
+                  <div className="text-xs">
+                    <div className="font-medium">{r.mainStatus}</div>
+                    <div className="text-slate-500">{r.mainAnsweredCount} / {r.mainTotalCount} 문항</div>
+                  </div>
+                </td>
+                <td className="py-2 pr-4">
+                  <span className={`text-xs px-2 py-1 rounded ${
+                    r.reportStatus === 'COMPLETED' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {r.reportStatus}
+                  </span>
+                </td>
+                <td className="py-2 text-right">
+                  <button className="btn btn-outline text-sm" onClick={() => setSelectedUser(r.userId)}>
+                    상세보기
                   </button>
                 </td>
               </tr>
             ))}
-            {rows.length === 0 && (
+            {records.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-6 px-4 border text-center text-slate-500">데이터가 없습니다.</td>
+                <td colSpan={6} className="py-6 text-center text-slate-500">
+                  등록된 사용자가 없습니다.
+                </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      {/* 사용자 상세 응답 */}
+      {/* Detail Modal */}
       {selectedUser && selectedRecord && (
-        <div className="card p-6 max-h-screen flex flex-col">
-          {/* 고정 헤더 */}
-          <div className="flex justify-between items-center mb-4 pb-4 border-b">
-            <h3 className="text-lg font-semibold">{selectedUser}의 상세 응답</h3>
-            <button 
-              className="btn btn-sm btn-outline"
-              onClick={() => setSelectedUser(null)}
-            >
-              닫기
-            </button>
-          </div>
-          
-          {/* 고정 탭 네비게이션 */}
-          <div className="flex border-b mb-6">
-            <button
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'pre'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-              onClick={() => setActiveTab('pre')}
-            >
-              사전 설문
-            </button>
-            <button
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'main'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-              onClick={() => setActiveTab('main')}
-            >
-              본 설문
-            </button>
-            <button
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'report'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-              onClick={() => setActiveTab('report')}
-            >
-              리포트
-            </button>
-          </div>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="p-6 border-b sticky top-0 bg-white z-10">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">{selectedRecord.email} - 상세 응답</h3>
+                <button className="btn btn-outline" onClick={() => setSelectedUser(null)}>닫기</button>
+              </div>
+              {/* Tabs */}
+              <div className="flex gap-2 mt-4">
+                <button
+                  className={`px-4 py-2 rounded ${activeTab === 'pre' ? 'bg-blue-500 text-white' : 'bg-slate-100'}`}
+                  onClick={() => setActiveTab('pre')}
+                >
+                  사전 설문
+                </button>
+                <button
+                  className={`px-4 py-2 rounded ${activeTab === 'main' ? 'bg-blue-500 text-white' : 'bg-slate-100'}`}
+                  onClick={() => setActiveTab('main')}
+                >
+                  본 설문
+                </button>
+                <button
+                  className={`px-4 py-2 rounded ${activeTab === 'report' ? 'bg-blue-500 text-white' : 'bg-slate-100'}`}
+                  onClick={() => setActiveTab('report')}
+                >
+                  리포트
+                </button>
+              </div>
+            </div>
 
-          {/* 스크롤 가능한 탭 콘텐츠 */}
-          <div className="flex-1 max-h-[600px] overflow-y-auto">
-            {/* 사전 설문 탭 */}
-            {activeTab === 'pre' && (
-              <div>
-                {selectedRecord.preAnswers && selectedRecord.preAnswers.answers.length > 0 ? (
-                  <div>
-                    <h4 className="font-semibold mb-3">사전 설문 응답 ({selectedRecord.preAnswers.answers.length}개)</h4>
-                    <div className="border rounded overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead className="bg-slate-100">
-                          <tr>
-                            <th className="p-3 text-left font-semibold border-r">문항 내용</th>
-                            <th className="p-3 text-left font-semibold">사용자 응답</th>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {activeTab === 'pre' && (
+                <div className="space-y-2">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50">
+                        <th className="border border-slate-300 px-4 py-2 text-left font-semibold">문항 내용</th>
+                        <th className="border border-slate-300 px-4 py-2 text-left font-semibold w-1/3">사용자 응답</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preQuestions.map((q) => {
+                        const answer = selectedRecord.preAnswers.find(a => a.q_id === q.id);
+                        return (
+                          <tr key={q.id}>
+                            <td className="border border-slate-300 px-4 py-2">{q.text}</td>
+                            <td className="border border-slate-300 px-4 py-2">
+                              {answer ? getAnswerText(answer, preQuestions) : '-'}
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {selectedRecord.preAnswers.answers.map((answer, idx) => {
-                            const question = preQuestions.find(q => q.id === answer.q_id);
-                            const responseText = question?.options 
-                              ? question.options[parseInt(String(answer.value)) - 1] || String(answer.value)
-                              : String(answer.value);
-                            return (
-                              <tr key={idx} className="border-t hover:bg-slate-50">
-                                <td className="p-3 border-r align-top">
-                                  <div className="font-medium text-slate-700">
-                                    {question?.text || `문항 ${answer.q_id}`}
-                                  </div>
-                                </td>
-                                <td className="p-3 align-top">
-                                  <div className="text-blue-600 font-medium">
-                                    {responseText}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center text-slate-500 py-8">
-                    사전 설문 응답이 없습니다.
-                  </div>
-                )}
-              </div>
-            )}
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
-            {/* 본 설문 탭 */}
-            {activeTab === 'main' && (
-              <div>
-                {selectedRecord.mainAnswers && selectedRecord.mainAnswers.answers.length > 0 ? (
-                  <div>
-                    <h4 className="font-semibold mb-3">
-                      본 설문 응답 ({selectedRecord.mainAnswers.answers.length}개)
-                      {mainQuestions.length > 0 && ` - 총 ${mainQuestions.length}개 문항 중`}
-                    </h4>
-                    <div className="border rounded overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead className="bg-slate-100">
-                          <tr>
-                            <th className="p-3 text-left font-semibold border-r">문항 내용</th>
-                            <th className="p-3 text-left font-semibold">사용자 응답</th>
+              {activeTab === 'main' && (
+                <div className="space-y-2">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50">
+                        <th className="border border-slate-300 px-4 py-2 text-left font-semibold">문항 내용</th>
+                        <th className="border border-slate-300 px-4 py-2 text-left font-semibold w-1/3">사용자 응답</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mainQuestions.map((q) => {
+                        const answer = selectedRecord.mainAnswers.find(a => a.q_id === q.id);
+                        return (
+                          <tr key={q.id}>
+                            <td className="border border-slate-300 px-4 py-2">{q.text}</td>
+                            <td className="border border-slate-300 px-4 py-2">
+                              {answer ? getAnswerText(answer, mainQuestions) : '-'}
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {selectedRecord.mainAnswers.answers.map((answer, idx) => {
-                            const question = mainQuestions.find(q => q.id === answer.q_id);
-                            const likertLabels = ["전혀 그렇지 않다", "그렇지 않다", "약간 그렇지 않다", "약간 그렇다", "그렇다", "매우 그렇다"];
-                            const responseText = likertLabels[parseInt(String(answer.value)) - 1] || String(answer.value);
-                            return (
-                              <tr key={idx} className="border-t hover:bg-slate-50">
-                                <td className="p-3 border-r align-top">
-                                  <div className="font-medium text-slate-700">
-                                    {question?.text || `문항 ${answer.q_id}`}
-                                  </div>
-                                </td>
-                                <td className="p-3 align-top">
-                                  <div className="text-blue-600 font-medium">
-                                    {responseText}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center text-slate-500 py-8">
-                    본 설문 응답이 없습니다.
-                  </div>
-                )}
-              </div>
-            )}
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
-            {/* 리포트 탭 */}
-            {activeTab === 'report' && (
-              <div>
-                {selectedRecord.reportData ? (
-                  <div>
-                    <h4 className="font-semibold mb-3">리포트 결과</h4>
-                    <div className="space-y-4 border rounded p-4 bg-blue-50">
-                      {selectedRecord.reportData.type && (
-                        <div className="bg-white p-3 rounded border">
-                          <h5 className="font-semibold text-blue-700 mb-2">에니어그램 유형</h5>
-                          <p className="text-lg font-bold text-blue-800">{selectedRecord.reportData.type}</p>
-                        </div>
-                      )}
-                      
-                      {selectedRecord.reportData.characteristics && (
-                        <div className="bg-white p-3 rounded border">
-                          <h5 className="font-semibold text-blue-700 mb-2">특징</h5>
-                          <p className="text-sm leading-relaxed">{selectedRecord.reportData.characteristics}</p>
-                        </div>
-                      )}
-                      
-                      {selectedRecord.reportData.job_recommendations && selectedRecord.reportData.job_recommendations.length > 0 && (
-                        <div className="bg-white p-3 rounded border">
-                          <h5 className="font-semibold text-blue-700 mb-2">추천 직업</h5>
-                          <ul className="space-y-1">
-                            {selectedRecord.reportData.job_recommendations.map((job: string, idx: number) => (
-                              <li key={idx} className="text-sm flex items-center">
-                                <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-semibold mr-2">
-                                  {idx + 1}
-                                </span>
-                                {job}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      
-                      {selectedRecord.reportData.generated_at && (
-                        <div className="text-xs text-slate-500">
-                          생성일: {new Date(selectedRecord.reportData.generated_at).toLocaleString('ko-KR')}
-                        </div>
-                      )}
+              {activeTab === 'report' && (
+                <div className="space-y-4">
+                  {selectedRecord.reportData ? (
+                    <>
+                      <div className="card p-4 bg-blue-50">
+                        <h4 className="font-semibold text-blue-900">유형</h4>
+                        <p className="mt-2">{selectedRecord.reportData.enneagram_type || '-'}</p>
+                      </div>
+                      <div className="card p-4">
+                        <h4 className="font-semibold">특징</h4>
+                        <ul className="mt-2 space-y-1 list-disc list-inside">
+                          {(selectedRecord.reportData.characteristics || []).map((trait: string, i: number) => (
+                            <li key={i}>{trait}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="card p-4">
+                        <h4 className="font-semibold">추천 직업</h4>
+                        <ul className="mt-2 space-y-1 list-disc list-inside">
+                          {(selectedRecord.reportData.job_recommendations || []).map((job: string, i: number) => (
+                            <li key={i}>{job}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center text-slate-500 py-8">
+                      리포트가 아직 생성되지 않았습니다.
                     </div>
-                  </div>
-                ) : (
-                  <div className="text-center text-slate-500 py-8">
-                    리포트가 아직 생성되지 않았습니다.
-                  </div>
-                )}
-              </div>
-            )}
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -513,5 +454,3 @@ export default function AdminResponsesPage() {
     </div>
   );
 }
-
-

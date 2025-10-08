@@ -2,39 +2,93 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
-type StoredUser = { uid: string; email: string; name?: string; role: "user" | "admin"; password?: string };
-
-const LS_USERS = "auth.users.v1";
+type StoredUser = { id: string; email: string; name?: string; role: "user" | "admin" };
 
 export default function AdminSettingsPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const [users, setUsers] = useState<Record<string, StoredUser>>({});
+  const [users, setUsers] = useState<StoredUser[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user?.role !== "admin") {
       router.replace("/");
       return;
     }
-    const raw = typeof window !== "undefined" ? window.localStorage.getItem(LS_USERS) : null;
-    setUsers(raw ? JSON.parse(raw) : {});
+    loadUsers();
   }, [user, router]);
 
-  const list = useMemo(() => Object.values(users).sort((a, b) => a.email.localeCompare(b.email)), [users]);
-
-  const updateRole = (email: string, role: "user" | "admin") => {
-    const updated = { ...users, [email]: { ...users[email], role } };
-    setUsers(updated);
-    window.localStorage.setItem(LS_USERS, JSON.stringify(updated));
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, email, name, role')
+        .order('email', { ascending: true });
+      
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (error) {
+      console.error('Error loading users:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const removeUser = (email: string) => {
-    const updated = { ...users };
-    delete updated[email];
-    setUsers(updated);
-    window.localStorage.setItem(LS_USERS, JSON.stringify(updated));
+  const updateRole = async (userId: string, role: "user" | "admin") => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ role })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setUsers(users.map(u => u.id === userId ? { ...u, role } : u));
+    } catch (error) {
+      console.error('Error updating role:', error);
+      alert('역할 변경에 실패했습니다.');
+    }
   };
+
+  const removeUser = async (userId: string, email: string) => {
+    if (!confirm(`${email} 사용자를 삭제하시겠습니까?`)) return;
+    
+    try {
+      // Delete related data first
+      await supabase.from('reports').delete().eq('user_id', userId);
+      await supabase.from('survey_answers').delete().eq('user_id', userId);
+      await supabase.from('user_progress').delete().eq('user_id', userId);
+      
+      // Delete user
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setUsers(users.filter(u => u.id !== userId));
+    } catch (error) {
+      console.error('Error removing user:', error);
+      alert('사용자 삭제에 실패했습니다.');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">관리자 설정</h2>
+        <div className="card p-6 text-center text-slate-600">
+          로딩 중...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -50,26 +104,26 @@ export default function AdminSettingsPage() {
             </tr>
           </thead>
           <tbody>
-            {list.map((u) => (
-              <tr key={u.email} className="border-t">
+            {users.map((u) => (
+              <tr key={u.id} className="border-t">
                 <td className="py-2">{u.email}</td>
                 <td className="py-2">{u.name ?? "-"}</td>
                 <td className="py-2">
                   <select
                     className="border rounded-md px-2 py-1"
                     value={u.role}
-                    onChange={(e) => updateRole(u.email, e.target.value as any)}
+                    onChange={(e) => updateRole(u.id, e.target.value as any)}
                   >
                     <option value="user">user</option>
                     <option value="admin">admin</option>
                   </select>
                 </td>
                 <td className="py-2 text-right">
-                  <button className="btn btn-outline" onClick={() => removeUser(u.email)}>삭제</button>
+                  <button className="btn btn-outline" onClick={() => removeUser(u.id, u.email)}>삭제</button>
                 </td>
               </tr>
             ))}
-            {list.length === 0 && (
+            {users.length === 0 && (
               <tr>
                 <td colSpan={4} className="py-6 text-center text-slate-500">등록된 사용자가 없습니다.</td>
               </tr>
