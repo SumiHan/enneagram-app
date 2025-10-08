@@ -86,6 +86,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: undefined, // Disable email confirmation redirect
+        }
       });
 
       if (authError) throw authError;
