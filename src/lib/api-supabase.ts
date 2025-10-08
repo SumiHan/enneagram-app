@@ -138,25 +138,6 @@ export async function apiCompletePre(userId: string) {
   }
 }
 
-export async function apiStartMainSession(userId: string, seed: number) {
-  try {
-    const { error } = await supabase
-      .from('user_progress')
-      .update({
-        main_survey_status: 'IN_PROGRESS',
-        main_survey_seed: seed,
-      })
-      .eq('user_id', userId);
-
-    if (error) throw error;
-
-    return { success: true };
-  } catch (error) {
-    console.error('Error starting main session:', error);
-    throw error;
-  }
-}
-
 export async function apiPatchMainAnswers(
   userId: string,
   answers: SurveyAnswer[],
