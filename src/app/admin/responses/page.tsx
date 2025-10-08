@@ -73,7 +73,7 @@ export default function AdminResponsesPage() {
           .eq('user_id', userData.id)
           .single();
         
-        // Load pre-survey answers
+        // Load pre-survey answers (maybeSingle to avoid error when no data)
         const { data: preAnswersData } = await supabase
           .from('survey_answers')
           .select('*')
@@ -81,9 +81,9 @@ export default function AdminResponsesPage() {
           .eq('survey_type', 'PRE')
           .order('created_at', { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
         
-        // Load main survey answers
+        // Load main survey answers (maybeSingle to avoid error when no data)
         const { data: mainAnswersData } = await supabase
           .from('survey_answers')
           .select('*')
@@ -91,16 +91,16 @@ export default function AdminResponsesPage() {
           .eq('survey_type', 'MAIN')
           .order('created_at', { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
         
-        // Load report
+        // Load report (maybeSingle to avoid error when no data)
         const { data: reportData } = await supabase
           .from('reports')
           .select('*')
           .eq('user_id', userData.id)
           .order('created_at', { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle(); // Use maybeSingle instead of single to handle no data gracefully
         
         userRecords.push({
           userId: userData.id,
