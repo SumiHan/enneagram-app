@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 import type { SurveyAnswer, UserProgress } from "./types";
 import { getPreQuestionsFromStorage, getMainQuestionsFromStorage } from "./dynamic-questions";
 import { PRE_QUESTIONS, MAIN_QUESTIONS_POOL } from "@/data/questions";
+import { eventBus, EVENTS } from "./event-bus";
 
 function defaultProgress(userId: string): UserProgress {
   return {
@@ -379,6 +380,21 @@ export async function apiGenerateReport(userId: string) {
       .eq('user_id', userId);
 
     if (progressError) throw progressError;
+
+    // Emit event to notify UI components
+    eventBus.emit(EVENTS.REPORT_GENERATED, {
+      userId,
+      reportId: data.id,
+      reportData: {
+        id: data.id,
+        type: data.enneagram_type,
+        characteristics: data.characteristics,
+        job_recommendations: data.job_recommendations,
+        generated_at: data.generated_at,
+      }
+    });
+
+    console.log(`Report generated for user ${userId}, emitting event`);
 
     return {
       id: data.id,

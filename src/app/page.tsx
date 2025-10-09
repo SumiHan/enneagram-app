@@ -7,6 +7,8 @@ import { apiGetProgress, apiGetReportStatus, apiGetPreResponse, apiGetMainRespon
 import { useAuth } from "@/lib/auth-context";
 import { useSurveyStatus } from "@/hooks/useSurveyStatus";
 import { DebugPanel } from "@/components/DebugPanel";
+import { eventBus, EVENTS } from "@/lib/event-bus";
+import { useRealtimeSubscription } from "@/lib/realtime";
 
 export default function HomePage() {
   const router = useRouter();
@@ -21,6 +23,9 @@ export default function HomePage() {
   // Use DB-based survey status hooks (single source of truth)
   const preStatus = useSurveyStatus(userId, 'pre');
   const mainStatus = useSurveyStatus(userId, 'main');
+  
+  // Initialize real-time subscriptions
+  const isRealtimeConnected = useRealtimeSubscription();
 
   useEffect(() => {
     // Wait for auth to load
@@ -51,42 +56,74 @@ export default function HomePage() {
   }, [progress, reload, user, authLoading, router]);
 
   // Load report status and answer counts from DB
-  useEffect(() => {
+  const loadData = async () => {
     if (!userId) {
       setLoadingReport(false);
       return;
     }
 
-    const loadData = async () => {
-      setLoadingReport(true);
-      try {
-        // Load report status
-        const status = await apiGetReportStatus(userId);
-        console.log('[HomePage] Report status from DB:', status);
-        setReportStatus(status);
-        
-        // Load pre-survey answer count
-        const preResponse = await apiGetPreResponse(userId);
-        const preCount = Object.keys(preResponse.answers || {}).length;
-        setPreAnswerCount(preCount);
-        console.log('[HomePage] Pre-survey answer count:', preCount);
-        
-        // Load main-survey answer count
-        const mainResponse = await apiGetMainResponse(userId);
-        const mainCount = Object.keys(mainResponse.answers || {}).length;
-        setMainAnswerCount(mainCount);
-        console.log('[HomePage] Main-survey answer count:', mainCount);
-      } catch (error) {
-        console.error('[HomePage] Error loading data:', error);
-        setReportStatus('not_started');
-        setPreAnswerCount(0);
-        setMainAnswerCount(0);
-      } finally {
-        setLoadingReport(false);
+    setLoadingReport(true);
+    try {
+      // Load report status
+      const status = await apiGetReportStatus(userId);
+      console.log('[HomePage] Report status from DB:', status);
+      setReportStatus(status);
+      
+      // Load pre-survey answer count
+      const preResponse = await apiGetPreResponse(userId);
+      const preCount = Object.keys(preResponse.answers || {}).length;
+      setPreAnswerCount(preCount);
+      console.log('[HomePage] Pre-survey answer count:', preCount);
+      
+      // Load main-survey answer count
+      const mainResponse = await apiGetMainResponse(userId);
+      const mainCount = Object.keys(mainResponse.answers || {}).length;
+      setMainAnswerCount(mainCount);
+      console.log('[HomePage] Main-survey answer count:', mainCount);
+    } catch (error) {
+      console.error('[HomePage] Error loading data:', error);
+      setReportStatus('not_started');
+      setPreAnswerCount(0);
+      setMainAnswerCount(0);
+    } finally {
+      setLoadingReport(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [userId]);
+
+  // Listen for report generation events
+  useEffect(() => {
+    const handleReportGenerated = (data: any) => {
+      console.log('[HomePage] Report generated event received:', data);
+      
+      // Only update if it's for the current user
+      if (data.userId === userId) {
+        setReportStatus('completed');
+        console.log('[HomePage] Updated report status to completed');
       }
     };
 
-    loadData();
+    const handleDataUpdated = (data: any) => {
+      console.log('[HomePage] Data updated event received:', data);
+      
+      // Refresh all data when any data is updated
+      if (data.userId === userId) {
+        loadData();
+      }
+    };
+
+    // Subscribe to events
+    eventBus.on(EVENTS.REPORT_GENERATED, handleReportGenerated);
+    eventBus.on(EVENTS.DATA_UPDATED, handleDataUpdated);
+
+    // Cleanup on unmount
+    return () => {
+      eventBus.off(EVENTS.REPORT_GENERATED, handleReportGenerated);
+      eventBus.off(EVENTS.DATA_UPDATED, handleDataUpdated);
+    };
   }, [userId]);
 
   // Calculate progress text

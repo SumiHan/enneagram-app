@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useProgress } from "@/lib/progress-context";
 import { apiGenerateReport, apiGetLatestReport } from "@/lib/api";
+import { eventBus, EVENTS } from "@/lib/event-bus";
 
 export default function ReportPage() {
   const router = useRouter();
@@ -21,10 +22,19 @@ export default function ReportPage() {
 
   const onGenerate = async () => {
     setLoading(true);
-    const r = await apiGenerateReport(userId);
-    await reload();
-    setReport(r);
-    setLoading(false);
+    try {
+      const r = await apiGenerateReport(userId);
+      await reload();
+      setReport(r);
+      
+      // Emit data updated event for real-time UI updates
+      eventBus.emit(EVENTS.DATA_UPDATED, { userId });
+      console.log(`Report generated for user ${userId}, emitted data updated event`);
+    } catch (error) {
+      console.error('Error generating report:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const disabled = progress?.main_survey.status !== "COMPLETED";

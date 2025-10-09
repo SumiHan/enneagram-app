@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabase";
 import { getPreQuestionsFromStorage, getMainQuestionsFromStorage } from "@/lib/dynamic-questions";
 import type { SurveyAnswer, QuestionItem } from "@/lib/types";
 import { SurveyStatusCell } from "@/components/SurveyStatusCell";
+import { eventBus, EVENTS } from "@/lib/event-bus";
+import { useRealtimeSubscription } from "@/lib/realtime";
 import * as XLSX from 'xlsx';
 
 type UserRecord = {
@@ -34,6 +36,9 @@ export default function AdminResponsesPage() {
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'pre' | 'main' | 'report'>('pre');
   const [loading, setLoading] = useState(true);
+  
+  // Initialize real-time subscriptions
+  const isRealtimeConnected = useRealtimeSubscription();
 
   useEffect(() => {
     if (user?.role !== "admin") {
@@ -55,6 +60,33 @@ export default function AdminResponsesPage() {
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [user]);
+
+  // Listen for report generation events
+  useEffect(() => {
+    const handleReportGenerated = (data: any) => {
+      console.log('[AdminResponses] Report generated event received:', data);
+      
+      // Refresh data when any report is generated
+      loadData();
+    };
+
+    const handleDataUpdated = (data: any) => {
+      console.log('[AdminResponses] Data updated event received:', data);
+      
+      // Refresh data when any data is updated
+      loadData();
+    };
+
+    // Subscribe to events
+    eventBus.on(EVENTS.REPORT_GENERATED, handleReportGenerated);
+    eventBus.on(EVENTS.DATA_UPDATED, handleDataUpdated);
+
+    // Cleanup on unmount
+    return () => {
+      eventBus.off(EVENTS.REPORT_GENERATED, handleReportGenerated);
+      eventBus.off(EVENTS.DATA_UPDATED, handleDataUpdated);
+    };
+  }, []);
 
   const loadData = async () => {
     try {
