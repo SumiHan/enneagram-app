@@ -76,7 +76,12 @@ export default function MainSurveyPage() {
   
   // Scroll to top when page changes
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Use immediate scroll (no smooth) for reliability
+    window.scrollTo(0, 0);
+    // Also scroll with smooth for better UX
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
   }, [currentPage]);
   
   // Debug logging
@@ -163,10 +168,19 @@ export default function MainSurveyPage() {
     
     if (currentPage < 2 && Object.keys(answers).length >= questions.length) {
       console.log('Moving to page:', currentPage + 1);
-      // Scroll to top immediately before state change
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      
+      // Immediate scroll to top (multiple methods for reliability)
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      
+      // Update page
       setCurrentPage(currentPage + 1);
-      // Don't clear answers here - let useEffect handle loading
+      
+      // Delayed scroll as backup
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+      }, 0);
     } else {
       console.log('Cannot proceed - either at last page or not all questions answered');
     }
@@ -174,10 +188,18 @@ export default function MainSurveyPage() {
 
   const onPrevPage = () => {
     if (currentPage > 0) {
-      // Scroll to top immediately before state change
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Immediate scroll to top (multiple methods for reliability)
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      
+      // Update page
       setCurrentPage(currentPage - 1);
-      // Don't clear answers here - let useEffect handle loading
+      
+      // Delayed scroll as backup
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+      }, 0);
     }
   };
 
