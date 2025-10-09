@@ -136,7 +136,11 @@ export default function AdminResponsesPage() {
       const mappedPreQuestions = (preQData || []).map(q => ({
         ...q,
         id: q.q_id, // Use q_id as the id field
-        text: q.text_ko // Use text_ko as the text field
+        text: q.text_ko, // Use text_ko as the text field
+        // Parse options if it's a string separated by '/'
+        options: typeof q.options === 'string' 
+          ? q.options.split('/').map((opt: string) => opt.trim()) 
+          : q.options
       }));
       
       const mappedMainQuestions = (mainQData || []).map(q => ({
@@ -317,18 +321,32 @@ export default function AdminResponsesPage() {
     }
     
     // Check if question has options (for pre-survey) or use Likert scale (for main-survey)
-    if (question.options && question.options.length > 0) {
-      const idx = parseInt(String(answer.value)) - 1;
-      const optionText = question.options[idx];
-      console.log('Using options:', { idx, optionText, options: question.options });
-      return optionText || `선택 ${answer.value}`;
-    } else {
-      // For main survey (Likert scale 1-6)
-      const likertLabels = ["전혀 그렇지 않다", "그렇지 않다", "약간 그렇지 않다", "약간 그렇다", "그렇다", "매우 그렇다"];
-      const likertText = likertLabels[parseInt(String(answer.value)) - 1] || String(answer.value);
-      console.log('Using Likert scale:', { value: answer.value, likertText });
-      return likertText;
+    if (question.options) {
+      // Handle options - could be array or string separated by '/'
+      let optionsArray: string[] = [];
+      
+      if (Array.isArray(question.options)) {
+        optionsArray = question.options;
+      } else if (typeof question.options === 'string') {
+        // Split by '/' if it's a string
+        optionsArray = (question.options as string).split('/').map((opt: string) => opt.trim());
+      }
+      
+      console.log('Parsed options:', { original: question.options, parsed: optionsArray });
+      
+      if (optionsArray.length > 0) {
+        const idx = parseInt(String(answer.value)) - 1;
+        const optionText = optionsArray[idx];
+        console.log('Using options:', { idx, optionText, optionsArray });
+        return optionText || `선택 ${answer.value}`;
+      }
     }
+    
+    // For main survey (Likert scale 1-6)
+    const likertLabels = ["전혀 그렇지 않다", "그렇지 않다", "약간 그렇지 않다", "약간 그렇다", "그렇다", "매우 그렇다"];
+    const likertText = likertLabels[parseInt(String(answer.value)) - 1] || String(answer.value);
+    console.log('Using Likert scale:', { value: answer.value, likertText });
+    return likertText;
   };
 
   const toggleUserSelection = (userId: string) => {
@@ -566,6 +584,7 @@ export default function AdminResponsesPage() {
                   <table className="w-full text-sm border-collapse">
                     <thead>
                       <tr className="bg-slate-50">
+                        <th className="border border-slate-300 px-4 py-2 text-center font-semibold w-20">문항 번호</th>
                         <th className="border border-slate-300 px-4 py-2 text-left font-semibold">문항 내용</th>
                         <th className="border border-slate-300 px-4 py-2 text-left font-semibold w-1/3">사용자 응답</th>
                       </tr>
@@ -576,6 +595,7 @@ export default function AdminResponsesPage() {
                         console.log(`Pre question ${q.id}:`, { question: q.text, answer: answer });
                         return (
                           <tr key={q.id}>
+                            <td className="border border-slate-300 px-4 py-2 text-center font-medium">{q.id}</td>
                             <td className="border border-slate-300 px-4 py-2">{q.text || '문항 텍스트 없음'}</td>
                             <td className="border border-slate-300 px-4 py-2">
                               {answer ? getAnswerText(answer, preQuestions) : '-'}
@@ -600,6 +620,7 @@ export default function AdminResponsesPage() {
                   <table className="w-full text-sm border-collapse">
                     <thead>
                       <tr className="bg-slate-50">
+                        <th className="border border-slate-300 px-4 py-2 text-center font-semibold w-20">문항 번호</th>
                         <th className="border border-slate-300 px-4 py-2 text-left font-semibold">문항 내용</th>
                         <th className="border border-slate-300 px-4 py-2 text-left font-semibold w-1/3">사용자 응답</th>
                       </tr>
@@ -610,6 +631,7 @@ export default function AdminResponsesPage() {
                         console.log(`Main question ${q.id}:`, { question: q.text, answer: answer });
                         return (
                           <tr key={q.id}>
+                            <td className="border border-slate-300 px-4 py-2 text-center font-medium">{q.id}</td>
                             <td className="border border-slate-300 px-4 py-2">{q.text || '문항 텍스트 없음'}</td>
                             <td className="border border-slate-300 px-4 py-2">
                               {answer ? getAnswerText(answer, mainQuestions) : '-'}
