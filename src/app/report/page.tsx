@@ -34,7 +34,7 @@ function ReportContent() {
     (async () => {
       if (!userId) return;
       
-      setLoading(true);
+      // Don't show loading for initial check (only for generation)
       try {
         const r = await apiGetLatestReport(userId);
         if (r) {
@@ -42,8 +42,6 @@ function ReportContent() {
         }
       } catch (error) {
         console.error('Error loading report:', error);
-      } finally {
-        setLoading(false);
       }
     })();
   }, [userId]);
@@ -65,6 +63,7 @@ function ReportContent() {
         progress?.main_survey.status === "COMPLETED") {
       console.log('[ReportPage] Starting auto-generation...');
       autoGenerateTriggered.current = true;
+      setLoading(true);  // Set loading immediately
       onGenerate();
     }
   }, [searchParams, progress, onGenerate]);
