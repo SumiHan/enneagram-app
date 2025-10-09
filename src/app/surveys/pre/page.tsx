@@ -38,33 +38,50 @@ export default function PreSurveyPage() {
 
   useEffect(() => {
     // Load existing answers from Supabase (after questions are loaded)
-    if (!preList || preList.length === 0 || !userId) return;
+    if (!preList || preList.length === 0 || !userId) {
+      console.log('[PreSurvey] Skipping load: preList=', preList?.length, 'userId=', userId);
+      return;
+    }
+    
+    console.log('[PreSurvey] Loading existing answers for userId:', userId);
     
     const loadExistingAnswers = async () => {
       try {
         const response = await apiGetPreResponse(userId);
-        console.log('Loaded pre-survey response:', response);
+        console.log('[PreSurvey] API response:', response);
+        console.log('[PreSurvey] Response.answers:', response.answers);
+        console.log('[PreSurvey] Response.answers keys:', Object.keys(response.answers));
         
         if (response.answers && Object.keys(response.answers).length > 0) {
           const loadedAnswers: Record<string, string | null> = {};
           
+          console.log('[PreSurvey] Converting answers...');
           // Convert from { q_id: value_index } to { q_id: option_text }
           Object.entries(response.answers).forEach(([qId, valueIndex]) => {
+            console.log(`[PreSurvey] Processing: qId=${qId}, valueIndex=${valueIndex}`);
             const question = preList.find(q => q.id === qId);
+            console.log(`[PreSurvey] Found question:`, question);
+            
             if (question && question.options) {
               const optionIndex = valueIndex - 1; // 1-based to 0-based
+              console.log(`[PreSurvey] OptionIndex: ${optionIndex}, options:`, question.options);
+              
               if (optionIndex >= 0 && optionIndex < question.options.length) {
                 const optionText = question.options[optionIndex];
                 loadedAnswers[qId] = optionText ? optionText.trim() : null;
+                console.log(`[PreSurvey] Loaded: ${qId} = ${optionText}`);
               }
             }
           });
           
-          console.log('Converted loaded answers:', loadedAnswers);
+          console.log('[PreSurvey] ✅ Final converted loaded answers:', loadedAnswers);
+          console.log('[PreSurvey] ✅ Loaded answers count:', Object.keys(loadedAnswers).length);
           setAnswers(loadedAnswers);
+        } else {
+          console.log('[PreSurvey] No answers to load (empty or null)');
         }
       } catch (error) {
-        console.error('Error loading existing pre-survey:', error);
+        console.error('[PreSurvey] ❌ Error loading existing pre-survey:', error);
       }
     };
     
