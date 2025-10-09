@@ -3,16 +3,19 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useProgress } from "@/lib/progress-context";
 import { ProgressCard } from "@/components/ProgressCard";
-import { apiGetProgress, apiGetPreResponse, apiGetMainResponse } from "@/lib/api";
+import { apiGetProgress } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { useSurveyStatus } from "@/hooks/useSurveyStatus";
 
 export default function HomePage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { userId, progress, reload } = useProgress();
   const [hydrated, setHydrated] = useState(false);
-  const [preResponseStatus, setPreResponseStatus] = useState<'in_progress' | 'completed' | null>(null);
-  const [mainResponseStatus, setMainResponseStatus] = useState<'in_progress' | 'completed' | null>(null);
+  
+  // Use DB-based survey status hooks (single source of truth)
+  const preStatus = useSurveyStatus(userId, 'pre');
+  const mainStatus = useSurveyStatus(userId, 'main');
 
   useEffect(() => {
     // Wait for auth to load
@@ -39,28 +42,19 @@ export default function HomePage() {
     // ensure progress loaded
     if (!progress) reload();
     
-    // Load pre-survey and main-survey response status
-    if (userId) {
-      apiGetPreResponse(userId).then(response => {
-        setPreResponseStatus(response.status);
-      });
-      
-      apiGetMainResponse(userId).then(response => {
-        setMainResponseStatus(response.status);
-      });
-    }
-    
     setHydrated(true);
-  }, [progress, reload, user, authLoading, router, userId]);
+  }, [progress, reload, user, authLoading, router]);
 
   const prePct = progress ? Math.round((progress.pre_survey.answered_count / progress.pre_survey.total_count) * 100) : 0;
   const mainPct = progress ? Math.round((progress.main_survey.sets / progress.main_survey.total_sets) * 100) : 0;
 
   // Show loading state
-  if (authLoading) {
+  if (authLoading || preStatus.loading || mainStatus.loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="text-slate-600">로딩 중...</div>
+        <div className="text-slate-600">
+          {authLoading ? '로그인 확인 중...' : '설문 상태를 불러오는 중...'}
+        </div>
       </div>
     );
   }
@@ -80,8 +74,8 @@ export default function HomePage() {
           status={progress?.pre_survey.status ?? "NOT_STARTED"}
           progressPct={prePct}
           actionLabel={
-            preResponseStatus === 'in_progress' ? "이어하기" :
-            preResponseStatus === 'completed' ? "수정하기" :
+            preStatus.status === 'in_progress' ? "이어하기" :
+            preStatus.status === 'completed' ? "수정하기" :
             "시작하기"
           }
           onAction={() => router.push("/surveys/pre")}
@@ -92,12 +86,12 @@ export default function HomePage() {
           status={progress?.main_survey.status ?? "NOT_STARTED"}
           progressPct={mainPct}
           actionLabel={
-            mainResponseStatus === 'in_progress' ? "이어하기" :
-            mainResponseStatus === 'completed' ? "수정하기" :
+            mainStatus.status === 'in_progress' ? "이어하기" :
+            mainStatus.status === 'completed' ? "수정하기" :
             "시작하기"
           }
           onAction={() => router.push("/surveys/main")}
-          disabled={progress?.pre_survey.status !== "COMPLETED"}
+          disabled={preStatus.status !== 'completed'}
         />
         <div className="md:col-span-2">
           <ProgressCard

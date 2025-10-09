@@ -7,14 +7,19 @@ import type { QuestionItem } from "@/lib/types";
 import { RadioOptions } from "@/components/RadioOptions";
 import { apiCompletePre, apiPatchPreAnswers, apiGetPreResponse } from "@/lib/api";
 import { useProgress } from "@/lib/progress-context";
+import { useSurveyStatus } from "@/hooks/useSurveyStatus";
 
 export default function PreSurveyPage() {
   const router = useRouter();
   const { userId, progress, reload } = useProgress();
   const [answers, setAnswers] = useState<Record<string, string | null>>({});
   const saveTimer = useRef<number | null>(null);
+  const hasSetInProgressRef = useRef(false); // Track if we've set in_progress status
 
   const [preList, setPreList] = useState<QuestionItem[] | null>(null);
+  
+  // Use DB-based status hook
+  const surveyStatus = useSurveyStatus(userId, 'pre');
 
   useEffect(() => {
     // Load questions from Supabase
@@ -89,6 +94,16 @@ export default function PreSurveyPage() {
       
       console.log('Updated answers count:', Object.keys(next).filter(k => next[k] !== null).length);
       
+      // Set status to 'in_progress' on first answer
+      const validAnswers = Object.keys(next).filter(k => next[k] !== null).length;
+      if (validAnswers > 0 && !hasSetInProgressRef.current && surveyStatus.status !== 'in_progress') {
+        hasSetInProgressRef.current = true;
+        surveyStatus.updateStatus('in_progress').catch(err => {
+          console.error('Failed to set in_progress status:', err);
+          hasSetInProgressRef.current = false; // Reset on error
+        });
+      }
+      
       // Trigger save with updated state
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(async () => {
@@ -127,19 +142,31 @@ export default function PreSurveyPage() {
   };
 
   const onComplete = async () => {
-    await apiCompletePre(userId);
-    await reload();
-    router.push("/");
+    try {
+      // Update status to 'completed' via hook (DB first)
+      await surveyStatus.updateStatus('completed');
+      
+      // Then call API to update other tables
+      await apiCompletePre(userId);
+      await reload();
+      
+      router.push("/");
+    } catch (error) {
+      console.error('Failed to complete pre-survey:', error);
+      alert('설문 완료 중 오류가 발생했습니다. 다시 시도해주세요.');
+    }
   };
 
   // 로딩 중일 때 표시
-  if (!preList) {
+  if (!preList || surveyStatus.loading) {
     return (
       <div className="flex flex-col gap-6">
         <button className="btn btn-outline w-fit" onClick={() => router.back()}>← 홈</button>
         <h2 className="text-xl font-semibold">사전 설문</h2>
         <div className="flex items-center justify-center py-12">
-          <div className="text-slate-600">질문을 불러오는 중...</div>
+          <div className="text-slate-600">
+            {!preList ? '질문을 불러오는 중...' : '설문 상태를 불러오는 중...'}
+          </div>
         </div>
       </div>
     );

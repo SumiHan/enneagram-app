@@ -9,6 +9,7 @@ import { mulberry32, shuffleDeterministic } from "@/lib/rng";
 import { apiCompleteMain, apiPatchMainAnswers, apiStartMainSession, apiGetMainResponse } from "@/lib/api";
 import { useProgress } from "@/lib/progress-context";
 import { getLocalStorage } from "@/lib/storage";
+import { useSurveyStatus } from "@/hooks/useSurveyStatus";
 
 export default function MainSurveyPage() {
   const router = useRouter();
@@ -18,6 +19,10 @@ export default function MainSurveyPage() {
   const [allAnswers, setAllAnswers] = useState<Record<string, number>>({}); // All answers across all pages
   const [currentPage, setCurrentPage] = useState(0);
   const saveTimer = useRef<number | null>(null);
+  const hasSetInProgressRef = useRef(false); // Track if we've set in_progress status
+  
+  // Use DB-based status hook
+  const surveyStatus = useSurveyStatus(userId, 'main');
 
   useEffect(() => {
     if (!progress) return;
@@ -124,6 +129,15 @@ export default function MainSurveyPage() {
       const nextAll = { ...allAnswers, [questionId]: value };
       setAllAnswers(nextAll);
       
+      // Set status to 'in_progress' on first answer
+      if (Object.keys(nextAll).length > 0 && !hasSetInProgressRef.current && surveyStatus.status !== 'in_progress') {
+        hasSetInProgressRef.current = true;
+        surveyStatus.updateStatus('in_progress').catch(err => {
+          console.error('Failed to set in_progress status:', err);
+          hasSetInProgressRef.current = false; // Reset on error
+        });
+      }
+      
       // Auto-save all answers
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(async () => {
@@ -208,20 +222,32 @@ export default function MainSurveyPage() {
   }, [currentPage, userId, allQuestions, questions]);
 
   const onComplete = async () => {
-    await apiCompleteMain(userId);
-    await reload();
-    router.push("/");
+    try {
+      // Update status to 'completed' via hook (DB first)
+      await surveyStatus.updateStatus('completed');
+      
+      // Then call API to update other tables
+      await apiCompleteMain(userId);
+      await reload();
+      
+      router.push("/");
+    } catch (error) {
+      console.error('Failed to complete main survey:', error);
+      alert('설문 완료 중 오류가 발생했습니다. 다시 시도해주세요.');
+    }
   };
 
 
   // 로딩 중일 때 표시
-  if (!allQuestions) {
+  if (!allQuestions || surveyStatus.loading) {
     return (
       <div className="flex flex-col gap-6">
         <button className="btn btn-outline w-fit" onClick={() => router.back()}>← 홈</button>
         <h2 className="text-xl font-semibold">본 설문</h2>
         <div className="flex items-center justify-center py-12">
-          <div className="text-slate-600">질문을 불러오는 중...</div>
+          <div className="text-slate-600">
+            {!allQuestions ? '질문을 불러오는 중...' : '설문 상태를 불러오는 중...'}
+          </div>
         </div>
       </div>
     );
