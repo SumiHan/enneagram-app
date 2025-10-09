@@ -6,6 +6,7 @@ import { ProgressCard } from "@/components/ProgressCard";
 import { apiGetProgress } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useSurveyStatus } from "@/hooks/useSurveyStatus";
+import { DebugPanel } from "@/components/DebugPanel";
 
 export default function HomePage() {
   const router = useRouter();
@@ -65,9 +66,10 @@ export default function HomePage() {
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <h1 className="text-2xl font-bold">에니어그램 성향 분석</h1>
-      <div className="grid gap-4 md:grid-cols-2">
+    <>
+      <div className="flex flex-col gap-5">
+        <h1 className="text-2xl font-bold">에니어그램 성향 분석</h1>
+        <div className="grid gap-4 md:grid-cols-2">
         <ProgressCard
           title="사전 설문"
           description="간단한 준비 설문입니다. 완료 후 본 설문이 활성화됩니다."
@@ -106,6 +108,10 @@ export default function HomePage() {
         </div>
       </div>
     </div>
+      
+      {/* Debug Panel - shows DB state on mobile */}
+      <DebugPanel surveyType="pre" status={preStatus.status} loading={preStatus.loading} />
+    </>
   );
 }
 
