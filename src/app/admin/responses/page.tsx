@@ -36,6 +36,7 @@ export default function AdminResponsesPage() {
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'pre' | 'main' | 'report'>('pre');
   const [loading, setLoading] = useState(true);
+  const [currentReportData, setCurrentReportData] = useState<any>(null);
   
   // Initialize real-time subscriptions
   const isRealtimeConnected = useRealtimeSubscription();
@@ -68,6 +69,13 @@ export default function AdminResponsesPage() {
       
       // Refresh data when any report is generated
       loadData();
+      
+      // If we're viewing the report tab for the user who generated the report, refresh report data
+      if (selectedUser && data.userId === selectedUser && activeTab === 'report') {
+        getFreshReportData(selectedUser).then(reportData => {
+          setCurrentReportData(reportData);
+        });
+      }
     };
 
     const handleDataUpdated = (data: any) => {
@@ -75,6 +83,13 @@ export default function AdminResponsesPage() {
       
       // Refresh data when any data is updated
       loadData();
+      
+      // If we're viewing the report tab for the user whose data was updated, refresh report data
+      if (selectedUser && data.userId === selectedUser && activeTab === 'report') {
+        getFreshReportData(selectedUser).then(reportData => {
+          setCurrentReportData(reportData);
+        });
+      }
     };
 
     // Subscribe to events
@@ -86,7 +101,17 @@ export default function AdminResponsesPage() {
       eventBus.off(EVENTS.REPORT_GENERATED, handleReportGenerated);
       eventBus.off(EVENTS.DATA_UPDATED, handleDataUpdated);
     };
-  }, []);
+  }, [selectedUser, activeTab]);
+
+  // Load fresh report data when report tab is activated
+  useEffect(() => {
+    if (selectedUser && activeTab === 'report') {
+      console.log(`Loading fresh report data for user: ${selectedUser}`);
+      getFreshReportData(selectedUser).then(reportData => {
+        setCurrentReportData(reportData);
+      });
+    }
+  }, [selectedUser, activeTab]);
 
   const loadData = async () => {
     try {
@@ -216,6 +241,25 @@ export default function AdminResponsesPage() {
       console.log(`Refreshed data for user: ${userId}`);
     } catch (error) {
       console.error('Error refreshing user data:', error);
+    }
+  };
+
+  // Function to get fresh report data for selected user
+  const getFreshReportData = async (userId: string) => {
+    try {
+      const { data: reportData } = await supabase
+        .from('reports')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      console.log(`Fresh report data for user ${userId}:`, reportData);
+      return reportData;
+    } catch (error) {
+      console.error('Error fetching fresh report data:', error);
+      return null;
     }
   };
 
@@ -513,32 +557,73 @@ export default function AdminResponsesPage() {
 
               {activeTab === 'report' && (
                 <div className="space-y-4">
-                  {selectedRecord.reportData ? (
+                  {currentReportData ? (
                     <>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">리포트 상세</h3>
+                        <button 
+                          className="btn btn-outline btn-sm"
+                          onClick={() => {
+                            if (selectedUser) {
+                              getFreshReportData(selectedUser).then(reportData => {
+                                setCurrentReportData(reportData);
+                              });
+                            }
+                          }}
+                        >
+                          새로고침
+                        </button>
+                      </div>
                       <div className="card p-4 bg-blue-50">
                         <h4 className="font-semibold text-blue-900">유형</h4>
-                        <p className="mt-2">{selectedRecord.reportData.enneagram_type || '-'}</p>
+                        <p className="mt-2">{currentReportData.enneagram_type || '-'}</p>
                       </div>
                       <div className="card p-4">
                         <h4 className="font-semibold">특징</h4>
-                        <ul className="mt-2 space-y-1 list-disc list-inside">
-                          {(selectedRecord.reportData.characteristics || []).map((trait: string, i: number) => (
-                            <li key={i}>{trait}</li>
-                          ))}
-                        </ul>
+                        <div className="mt-2">
+                          {typeof currentReportData.characteristics === 'string' 
+                            ? <p>{currentReportData.characteristics}</p>
+                            : <ul className="space-y-1 list-disc list-inside">
+                                {(currentReportData.characteristics || []).map((trait: string, i: number) => (
+                                  <li key={i}>{trait}</li>
+                                ))}
+                              </ul>
+                          }
+                        </div>
                       </div>
                       <div className="card p-4">
                         <h4 className="font-semibold">추천 직업</h4>
                         <ul className="mt-2 space-y-1 list-disc list-inside">
-                          {(selectedRecord.reportData.job_recommendations || []).map((job: string, i: number) => (
+                          {(currentReportData.job_recommendations || []).map((job: string, i: number) => (
                             <li key={i}>{job}</li>
                           ))}
                         </ul>
                       </div>
+                      <div className="card p-4 bg-slate-50">
+                        <h4 className="font-semibold">생성 정보</h4>
+                        <p className="mt-2 text-sm text-slate-600">
+                          생성일: {new Date(currentReportData.created_at || currentReportData.generated_at).toLocaleString('ko-KR')}
+                        </p>
+                      </div>
                     </>
                   ) : (
                     <div className="text-center text-slate-500 py-8">
-                      리포트가 아직 생성되지 않았습니다.
+                      <div className="mb-4">
+                        <p>리포트가 아직 생성되지 않았습니다.</p>
+                        <p className="text-sm mt-2">사용자가 본 설문을 완료한 후 리포트를 생성할 수 있습니다.</p>
+                      </div>
+                      <button 
+                        className="btn btn-outline"
+                        onClick={() => {
+                          if (selectedUser) {
+                            getFreshReportData(selectedUser).then(reportData => {
+                              setCurrentReportData(reportData);
+                            });
+                          }
+                        }}
+                      >
+                        새로고침
+                      </button>
                     </div>
                   )}
                 </div>
