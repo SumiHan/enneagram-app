@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useProgress } from "@/lib/progress-context";
 import { ProgressCard } from "@/components/ProgressCard";
-import { apiGetProgress } from "@/lib/api";
+import { apiGetProgress, apiGetPreResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 export default function HomePage() {
@@ -11,6 +11,7 @@ export default function HomePage() {
   const { user, loading: authLoading } = useAuth();
   const { userId, progress, reload } = useProgress();
   const [hydrated, setHydrated] = useState(false);
+  const [preResponseStatus, setPreResponseStatus] = useState<'in_progress' | 'completed' | null>(null);
 
   useEffect(() => {
     // Wait for auth to load
@@ -36,8 +37,16 @@ export default function HomePage() {
     console.log('Regular user, loading progress');
     // ensure progress loaded
     if (!progress) reload();
+    
+    // Load pre-survey response status
+    if (userId) {
+      apiGetPreResponse(userId).then(response => {
+        setPreResponseStatus(response.status);
+      });
+    }
+    
     setHydrated(true);
-  }, [progress, reload, user, authLoading, router]);
+  }, [progress, reload, user, authLoading, router, userId]);
 
   const prePct = progress ? Math.round((progress.pre_survey.answered_count / progress.pre_survey.total_count) * 100) : 0;
   const mainPct = progress ? Math.round((progress.main_survey.sets / progress.main_survey.total_sets) * 100) : 0;
@@ -65,7 +74,11 @@ export default function HomePage() {
           description="간단한 준비 설문입니다. 완료 후 본 설문이 활성화됩니다."
           status={progress?.pre_survey.status ?? "NOT_STARTED"}
           progressPct={prePct}
-          actionLabel={progress?.pre_survey.status === "IN_PROGRESS" ? "이어하기" : progress?.pre_survey.status === "COMPLETED" ? "다시 보기" : "시작하기"}
+          actionLabel={
+            preResponseStatus === 'in_progress' ? "이어하기" :
+            preResponseStatus === 'completed' ? "수정하기" :
+            "시작하기"
+          }
           onAction={() => router.push("/surveys/pre")}
         />
         <ProgressCard

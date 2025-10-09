@@ -5,7 +5,7 @@ import { PRE_QUESTIONS } from "@/data/questions";
 import { getPreSurveyQuestions } from "@/lib/survey-questions";
 import type { QuestionItem } from "@/lib/types";
 import { RadioOptions } from "@/components/RadioOptions";
-import { apiCompletePre, apiPatchPreAnswers } from "@/lib/api";
+import { apiCompletePre, apiPatchPreAnswers, apiGetPreResponse } from "@/lib/api";
 import { useProgress } from "@/lib/progress-context";
 
 export default function PreSurveyPage() {
@@ -32,39 +32,38 @@ export default function PreSurveyPage() {
   }, []);
 
   useEffect(() => {
-    // Load existing answers from localStorage (after questions are loaded)
-    if (typeof window === 'undefined' || !preList || preList.length === 0) return;
+    // Load existing answers from Supabase (after questions are loaded)
+    if (!preList || preList.length === 0 || !userId) return;
     
-    const surveyKey = `survey.pre.v1:${userId}`;
-    const existingSurvey = localStorage.getItem(surveyKey);
-    
-    if (existingSurvey) {
+    const loadExistingAnswers = async () => {
       try {
-        const parsed = JSON.parse(existingSurvey);
-        console.log('Loading existing pre-survey:', parsed);
+        const response = await apiGetPreResponse(userId);
+        console.log('Loaded pre-survey response:', response);
         
-        if (parsed.answers && Array.isArray(parsed.answers)) {
+        if (response.answers && Object.keys(response.answers).length > 0) {
           const loadedAnswers: Record<string, string | null> = {};
           
-          parsed.answers.forEach((answer: any) => {
-            const question = preList.find(q => q.id === answer.q_id);
+          // Convert from { q_id: value_index } to { q_id: option_text }
+          Object.entries(response.answers).forEach(([qId, valueIndex]) => {
+            const question = preList.find(q => q.id === qId);
             if (question && question.options) {
-              // Convert value (1-based index) back to option text
-              const optionIndex = parseInt(answer.value) - 1;
+              const optionIndex = valueIndex - 1; // 1-based to 0-based
               if (optionIndex >= 0 && optionIndex < question.options.length) {
                 const optionText = question.options[optionIndex];
-                loadedAnswers[answer.q_id] = optionText ? optionText.trim() : null;
+                loadedAnswers[qId] = optionText ? optionText.trim() : null;
               }
             }
           });
           
-          console.log('Loaded answers:', loadedAnswers);
+          console.log('Converted loaded answers:', loadedAnswers);
           setAnswers(loadedAnswers);
         }
       } catch (error) {
         console.error('Error loading existing pre-survey:', error);
       }
-    }
+    };
+    
+    loadExistingAnswers();
   }, [userId, preList]);
 
   const validAnswerCount = Object.keys(answers).filter(id => answers[id] !== null).length;
@@ -121,7 +120,7 @@ export default function PreSurveyPage() {
         
         await apiPatchPreAnswers(userId, payload, { page: 0, index: 0 });
         // Don't reload on every save - only reload on complete
-      }, 800);
+      }, 500); // 500ms debounce for auto-save
       
       return next;
     });

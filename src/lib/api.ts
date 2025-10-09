@@ -88,23 +88,27 @@ export async function apiPatchPreAnswers(
   lastPointer?: UserProgress["pre_survey"]["last_pointer"]
 ) {
   try {
-    // Upsert answers (insert or update)
-    const answersToUpsert = answers.map(a => ({
-      user_id: userId,
-      survey_type: 'PRE' as const,
-      q_id: a.q_id,
-      value: a.value,
-    }));
+    // Convert answers array to JSON object { q_id: value }
+    const answersJson: Record<string, number> = {};
+    answers.forEach(a => {
+      answersJson[a.q_id] = a.value;
+    });
 
+    // Upsert to responses table
     const { error } = await supabase
-      .from('survey_answers')
-      .upsert(answersToUpsert, {
-        onConflict: 'user_id,survey_type,q_id'
+      .from('responses')
+      .upsert({
+        user_id: userId,
+        survey_type: 'pre',
+        status: 'in_progress',
+        answers: answersJson,
+      }, {
+        onConflict: 'user_id,survey_type'
       });
 
     if (error) throw error;
 
-    // Update progress
+    // Update progress count
     const { error: progressError } = await supabase
       .from('user_progress')
       .update({
@@ -122,8 +126,45 @@ export async function apiPatchPreAnswers(
   }
 }
 
+export async function apiGetPreResponse(userId: string): Promise<{ status: 'in_progress' | 'completed' | null, answers: Record<string, number> }> {
+  try {
+    const { data, error } = await supabase
+      .from('responses')
+      .select('status, answers')
+      .eq('user_id', userId)
+      .eq('survey_type', 'pre')
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!data) {
+      return { status: null, answers: {} };
+    }
+
+    return {
+      status: data.status as 'in_progress' | 'completed',
+      answers: (data.answers as Record<string, number>) || {},
+    };
+  } catch (error) {
+    console.error('Error getting pre response:', error);
+    return { status: null, answers: {} };
+  }
+}
+
 export async function apiCompletePre(userId: string) {
   try {
+    // Update responses table to 'completed'
+    const { error: responseError } = await supabase
+      .from('responses')
+      .update({
+        status: 'completed',
+      })
+      .eq('user_id', userId)
+      .eq('survey_type', 'pre');
+
+    if (responseError) throw responseError;
+
+    // Update progress status
     const { error } = await supabase
       .from('user_progress')
       .update({
