@@ -1,26 +1,19 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect, useState, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useProgress } from "@/lib/progress-context";
 import { apiGenerateReport, apiGetLatestReport } from "@/lib/api";
 import { eventBus, EVENTS } from "@/lib/event-bus";
 
-export default function ReportPage() {
+function ReportContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { userId, progress, reload } = useProgress();
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const autoGenerateTriggered = React.useRef(false);
 
-  useEffect(() => {
-    (async () => {
-      if (progress?.report.status === "COMPLETED") {
-        const r = await apiGetLatestReport(userId);
-        setReport(r);
-      }
-    })();
-  }, [progress, userId]);
-
-  const onGenerate = async () => {
+  const onGenerate = useCallback(async () => {
     setLoading(true);
     try {
       const r = await apiGenerateReport(userId);
@@ -35,7 +28,30 @@ export default function ReportPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, reload]);
+
+  useEffect(() => {
+    (async () => {
+      if (progress?.report.status === "COMPLETED") {
+        const r = await apiGetLatestReport(userId);
+        setReport(r);
+      }
+    })();
+  }, [progress, userId]);
+
+  // Auto-generate report if ?generate=true is in URL
+  useEffect(() => {
+    const shouldAutoGenerate = searchParams.get('generate') === 'true';
+    
+    if (shouldAutoGenerate && 
+        !autoGenerateTriggered.current && 
+        !loading && 
+        !report && 
+        progress?.main_survey.status === "COMPLETED") {
+      autoGenerateTriggered.current = true;
+      onGenerate();
+    }
+  }, [searchParams, loading, report, progress, onGenerate]);
 
   const disabled = progress?.main_survey.status !== "COMPLETED";
 
@@ -81,6 +97,20 @@ export default function ReportPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ReportPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col gap-6">
+        <div className="card p-6 text-center text-slate-600">
+          로딩 중...
+        </div>
+      </div>
+    }>
+      <ReportContent />
+    </Suspense>
   );
 }
 

@@ -200,7 +200,14 @@ export default function HomePage() {
             description="유형, 특징, 직업 추천 3개를 확인합니다."
             status={reportStatus === 'completed' ? 'COMPLETED' : 'NOT_STARTED'}
             actionLabel={reportStatus === 'completed' ? "보기" : "생성하기"}
-            onAction={() => router.push("/report")}
+            onAction={() => {
+              // If report not completed, pass auto-generate flag
+              if (reportStatus !== 'completed') {
+                router.push("/report?generate=true");
+              } else {
+                router.push("/report");
+              }
+            }}
             disabled={mainStatus.status !== 'completed'}
           />
         </div>

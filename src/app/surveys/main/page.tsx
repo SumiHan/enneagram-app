@@ -74,6 +74,11 @@ export default function MainSurveyPage() {
   const pct = Math.round(((Object.keys(answers).length) / currentPageQuestionCount) * 100);
   const totalProgress = Math.round(((currentPage * 30 + Object.keys(answers).length) / shuffledQuestions.length) * 100);
   
+  // Scroll to top when page changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentPage]);
+  
   // Debug logging
   console.log('=== DEBUG INFO ===');
   console.log('Current page:', currentPage);
