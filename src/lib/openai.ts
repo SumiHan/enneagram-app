@@ -4,6 +4,8 @@ export interface OpenAIReportResult {
   enneagram_type: string;
   characteristics: string;
   job_recommendations: string[];
+  career_guidance?: string;
+  growth_advice?: string;
 }
 
 export async function generateReportWithOpenAI(
@@ -38,34 +40,52 @@ export async function generateReportWithOpenAI(
 
     if (promptError) throw promptError;
 
-    // 3. Format user responses for AI
-    const formattedPreAnswers = preAnswers.map(a => ({
-      question_id: a.q_id,
-      answer: a.value
-    }));
+    // 3. Load question data from Supabase
+    const { data: preQuestions, error: preQError } = await supabase
+      .from('pre_survey_questions')
+      .select('*')
+      .order('q_id');
+    
+    if (preQError) {
+      console.error('Error loading pre-survey questions:', preQError);
+      throw new Error('사전 설문 질문을 불러올 수 없습니다.');
+    }
 
-    const formattedMainAnswers = mainAnswers.map(a => ({
-      question_id: a.q_id,
-      answer: a.value
-    }));
+    const { data: mainQuestions, error: mainQError } = await supabase
+      .from('main_survey_questions')
+      .select('*')
+      .order('q_id');
+    
+    if (mainQError) {
+      console.error('Error loading main-survey questions:', mainQError);
+      throw new Error('본 설문 질문을 불러올 수 없습니다.');
+    }
 
-    const userResponseText = `
-사용자 ID: ${userId}
+    // 4. Format responses in Korean (same logic as admin detail view)
+    const formattedPreSurvey = formatPreSurveyResponses(preAnswers, preQuestions || []);
+    const formattedMainSurvey = formatMainSurveyResponses(mainAnswers, mainQuestions || []);
 
-[사전 설문 응답]
-${JSON.stringify(formattedPreAnswers, null, 2)}
+    console.log('Formatted Pre Survey:', formattedPreSurvey.substring(0, 200));
+    console.log('Formatted Main Survey:', formattedMainSurvey.substring(0, 200));
 
-[본 설문 응답 (Likert 1-6 척도)]
-${JSON.stringify(formattedMainAnswers, null, 2)}
-`;
+    // 5. Replace placeholders in prompt with actual formatted data
+    let finalPromptContent = prompt.content;
+    
+    // Replace common placeholder patterns
+    finalPromptContent = finalPromptContent
+      .replace(/\{\{pre_survey_responses\}\}/g, formattedPreSurvey)
+      .replace(/\{\{main_survey_responses\}\}/g, formattedMainSurvey)
+      .replace(/\{\{사전_설문_응답\}\}/g, formattedPreSurvey)
+      .replace(/\{\{본_설문_응답\}\}/g, formattedMainSurvey);
 
     console.log('Calling OpenAI API with prompt:', {
       promptTitle: prompt.title,
       preAnswersCount: preAnswers.length,
       mainAnswersCount: mainAnswers.length,
+      promptLength: finalPromptContent.length,
     });
 
-    // 4. Call OpenAI API
+    // 6. Call OpenAI API with formatted prompt
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -77,15 +97,11 @@ ${JSON.stringify(formattedMainAnswers, null, 2)}
         messages: [
           {
             role: 'system',
-            content: prompt.content
-          },
-          {
-            role: 'user',
-            content: userResponseText
+            content: finalPromptContent
           }
         ],
         temperature: 0.7,
-        max_tokens: 1500,
+        max_tokens: 2000,
       }),
     });
 
@@ -105,7 +121,7 @@ ${JSON.stringify(formattedMainAnswers, null, 2)}
     const aiResponse = data.choices[0].message.content;
     console.log('AI Generated Response:', aiResponse);
 
-    // 5. Parse AI response
+    // 7. Parse AI response
     // Try to parse as JSON first
     try {
       const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
@@ -114,7 +130,9 @@ ${JSON.stringify(formattedMainAnswers, null, 2)}
         return {
           enneagram_type: parsed.enneagram_type || parsed.type || 'Unknown',
           characteristics: parsed.characteristics || parsed.특징 || aiResponse,
-          job_recommendations: parsed.job_recommendations || parsed.직업추천 || []
+          job_recommendations: parsed.job_recommendations || parsed.직업추천 || [],
+          career_guidance: parsed.career_guidance || parsed.진로조언 || undefined,
+          growth_advice: parsed.growth_advice || parsed.성장조언 || undefined,
         };
       }
     } catch (parseError) {
@@ -128,6 +146,73 @@ ${JSON.stringify(formattedMainAnswers, null, 2)}
     console.error('Error generating report with OpenAI:', error);
     throw error;
   }
+}
+
+// Format pre-survey responses (same logic as admin detail view)
+function formatPreSurveyResponses(answers: any[], questions: any[]): string {
+  if (!questions || questions.length === 0) {
+    return '사전 설문 질문 정보 없음';
+  }
+
+  return questions.map((q, idx) => {
+    const answer = answers.find(a => String(a.q_id) === String(q.q_id));
+    
+    if (!answer) {
+      return `Q${idx + 1}. ${q.text_ko || q.text || '질문 없음'}\n→ 미응답`;
+    }
+
+    // Parse options (handle both array and '/' separated string)
+    let answerText = '';
+    if (q.options) {
+      let optionsArray: string[] = [];
+      
+      if (Array.isArray(q.options)) {
+        optionsArray = q.options;
+      } else if (typeof q.options === 'string') {
+        optionsArray = q.options.split('/').map((opt: string) => opt.trim());
+      }
+      
+      if (optionsArray.length > 0) {
+        const idx = parseInt(String(answer.value)) - 1;
+        answerText = optionsArray[idx] || `선택 ${answer.value}`;
+      } else {
+        answerText = String(answer.value);
+      }
+    } else {
+      answerText = String(answer.value);
+    }
+
+    return `Q${idx + 1}. ${q.text_ko || q.text || '질문 없음'}\n→ ${answerText}`;
+  }).join('\n\n');
+}
+
+// Format main-survey responses (Likert scale 1-6)
+function formatMainSurveyResponses(answers: any[], questions: any[]): string {
+  if (!questions || questions.length === 0) {
+    return '본 설문 질문 정보 없음';
+  }
+
+  const likertLabels = [
+    "전혀 그렇지 않다",
+    "그렇지 않다",
+    "약간 그렇지 않다",
+    "약간 그렇다",
+    "그렇다",
+    "매우 그렇다"
+  ];
+
+  return questions.map((q, idx) => {
+    const answer = answers.find(a => String(a.q_id) === String(q.q_id));
+    
+    if (!answer) {
+      return `Q${idx + 1}. ${q.text_ko || q.text || '질문 없음'}\n→ 미응답`;
+    }
+
+    const value = parseInt(String(answer.value));
+    const answerText = likertLabels[value - 1] || String(value);
+    
+    return `Q${idx + 1}. ${q.text_ko || q.text || '질문 없음'}\n→ ${value}점 (${answerText})`;
+  }).join('\n\n');
 }
 
 function extractReportFromText(text: string): OpenAIReportResult {

@@ -683,6 +683,22 @@ export default function AdminResponsesPage() {
                           ))}
                         </ul>
                       </div>
+                      {currentReportData.career_guidance && (
+                        <div className="card p-4">
+                          <h4 className="font-semibold">진로 가이드</h4>
+                          <p className="mt-2 text-slate-700 leading-relaxed whitespace-pre-line">
+                            {currentReportData.career_guidance}
+                          </p>
+                        </div>
+                      )}
+                      {currentReportData.growth_advice && (
+                        <div className="card p-4">
+                          <h4 className="font-semibold">성장 조언</h4>
+                          <p className="mt-2 text-slate-700 leading-relaxed whitespace-pre-line">
+                            {currentReportData.growth_advice}
+                          </p>
+                        </div>
+                      )}
                       <div className="card p-4 bg-slate-50">
                         <h4 className="font-semibold">생성 정보</h4>
                         <p className="mt-2 text-sm text-slate-600">

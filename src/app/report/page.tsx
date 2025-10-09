@@ -83,6 +83,18 @@ function ReportContent() {
                 ))}
               </ul>
             </div>
+            {report.career_guidance && (
+              <div className="bg-slate-50 p-4 rounded border">
+                <div className="font-semibold text-slate-800 mb-2">진로 가이드</div>
+                <p className="text-slate-700 leading-relaxed whitespace-pre-line">{report.career_guidance}</p>
+              </div>
+            )}
+            {report.growth_advice && (
+              <div className="bg-slate-50 p-4 rounded border">
+                <div className="font-semibold text-slate-800 mb-2">성장 조언</div>
+                <p className="text-slate-700 leading-relaxed whitespace-pre-line">{report.growth_advice}</p>
+              </div>
+            )}
             {report.generated_at && (
               <div className="text-xs text-slate-500 text-right">
                 생성일: {new Date(report.generated_at).toLocaleString('ko-KR')}

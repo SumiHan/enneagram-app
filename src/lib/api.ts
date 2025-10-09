@@ -480,6 +480,8 @@ export async function apiGetLatestReport(userId: string) {
       type: data.enneagram_type,
       characteristics: data.characteristics,
       job_recommendations: data.job_recommendations,
+      career_guidance: data.career_guidance,
+      growth_advice: data.growth_advice,
       generated_at: data.generated_at,
     };
   } catch (error) {
