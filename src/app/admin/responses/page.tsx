@@ -658,15 +658,18 @@ export default function AdminResponsesPage() {
                           새로고침
                         </button>
                       </div>
+                      {/* 1. 에니어그램 유형 */}
                       <div className="card p-4 bg-blue-50">
-                        <h4 className="font-semibold text-blue-900">유형</h4>
+                        <h4 className="font-semibold text-blue-900">에니어그램 유형</h4>
                         <p className="mt-2">{currentReportData.enneagram_type || '-'}</p>
                       </div>
+                      
+                      {/* 2. 특징 */}
                       <div className="card p-4">
                         <h4 className="font-semibold">특징</h4>
                         <div className="mt-2">
                           {typeof currentReportData.characteristics === 'string' 
-                            ? <p>{currentReportData.characteristics}</p>
+                            ? <p className="text-slate-700 leading-relaxed">{currentReportData.characteristics}</p>
                             : <ul className="space-y-1 list-disc list-inside">
                                 {(currentReportData.characteristics || []).map((trait: string, i: number) => (
                                   <li key={i}>{trait}</li>
@@ -675,14 +678,8 @@ export default function AdminResponsesPage() {
                           }
                         </div>
                       </div>
-                      <div className="card p-4">
-                        <h4 className="font-semibold">추천 직업</h4>
-                        <ul className="mt-2 space-y-1 list-disc list-inside">
-                          {(currentReportData.job_recommendations || []).map((job: string, i: number) => (
-                            <li key={i}>{job}</li>
-                          ))}
-                        </ul>
-                      </div>
+                      
+                      {/* 3. 진로 가이드 */}
                       {currentReportData.career_guidance && (
                         <div className="card p-4">
                           <h4 className="font-semibold">진로 가이드</h4>
@@ -691,6 +688,8 @@ export default function AdminResponsesPage() {
                           </p>
                         </div>
                       )}
+                      
+                      {/* 4. 성장 조언 */}
                       {currentReportData.growth_advice && (
                         <div className="card p-4">
                           <h4 className="font-semibold">성장 조언</h4>
@@ -699,6 +698,16 @@ export default function AdminResponsesPage() {
                           </p>
                         </div>
                       )}
+                      
+                      {/* 5. 추천 직업 */}
+                      <div className="card p-4">
+                        <h4 className="font-semibold">추천 직업</h4>
+                        <ul className="mt-2 space-y-1 list-disc list-inside">
+                          {(currentReportData.job_recommendations || []).map((job: string, i: number) => (
+                            <li key={i}>{job}</li>
+                          ))}
+                        </ul>
+                      </div>
                       <div className="card p-4 bg-slate-50">
                         <h4 className="font-semibold">생성 정보</h4>
                         <p className="mt-2 text-sm text-slate-600">

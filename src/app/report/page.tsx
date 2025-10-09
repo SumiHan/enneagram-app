@@ -62,14 +62,35 @@ function ReportContent() {
       <div className="card p-6 flex flex-col gap-4">
         {report ? (
           <div className="space-y-4">
+            {/* 1. 에니어그램 유형 */}
             <div className="bg-blue-50 p-4 rounded border">
               <div className="text-sm text-blue-600 font-medium mb-1">에니어그램 유형</div>
               <div className="text-2xl font-bold text-blue-800">{report.type}</div>
             </div>
+            
+            {/* 2. 특징 */}
             <div className="bg-slate-50 p-4 rounded border">
               <div className="font-semibold text-slate-800 mb-2">특징</div>
               <p className="text-slate-700 leading-relaxed">{report.characteristics}</p>
             </div>
+            
+            {/* 3. 진로 가이드 */}
+            {report.career_guidance && (
+              <div className="bg-slate-50 p-4 rounded border">
+                <div className="font-semibold text-slate-800 mb-2">진로 가이드</div>
+                <p className="text-slate-700 leading-relaxed whitespace-pre-line">{report.career_guidance}</p>
+              </div>
+            )}
+            
+            {/* 4. 성장 조언 */}
+            {report.growth_advice && (
+              <div className="bg-slate-50 p-4 rounded border">
+                <div className="font-semibold text-slate-800 mb-2">성장 조언</div>
+                <p className="text-slate-700 leading-relaxed whitespace-pre-line">{report.growth_advice}</p>
+              </div>
+            )}
+            
+            {/* 5. 추천 직업 */}
             <div className="bg-slate-50 p-4 rounded border">
               <div className="font-semibold text-slate-800 mb-2">추천 직업</div>
               <ul className="space-y-1">
@@ -83,18 +104,8 @@ function ReportContent() {
                 ))}
               </ul>
             </div>
-            {report.career_guidance && (
-              <div className="bg-slate-50 p-4 rounded border">
-                <div className="font-semibold text-slate-800 mb-2">진로 가이드</div>
-                <p className="text-slate-700 leading-relaxed whitespace-pre-line">{report.career_guidance}</p>
-              </div>
-            )}
-            {report.growth_advice && (
-              <div className="bg-slate-50 p-4 rounded border">
-                <div className="font-semibold text-slate-800 mb-2">성장 조언</div>
-                <p className="text-slate-700 leading-relaxed whitespace-pre-line">{report.growth_advice}</p>
-              </div>
-            )}
+            
+            {/* 생성일 */}
             {report.generated_at && (
               <div className="text-xs text-slate-500 text-right">
                 생성일: {new Date(report.generated_at).toLocaleString('ko-KR')}
