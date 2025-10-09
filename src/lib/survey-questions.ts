@@ -42,10 +42,22 @@ export const parseQuestionsCsv = (file: File, config: {
         }
         
         const headers = lines[0].split(',').map(h => h.trim());
+        console.log('CSV Headers:', headers);
         const data: QuestionItem[] = [];
         
         for (let i = 1; i < lines.length; i++) {
           const values = lines[i].split(',').map(v => v.trim());
+          
+          // 빈 행 건너뛰기 (모든 값이 비어있으면)
+          if (values.every(v => !v || v === '')) {
+            continue;
+          }
+          
+          // q_id가 없으면 건너뛰기 (필수 필드)
+          if (!values[0] || values[0] === '') {
+            continue;
+          }
+          
           const row: Record<string, string> = {};
           
           headers.forEach((header, index) => {
@@ -58,7 +70,7 @@ export const parseQuestionsCsv = (file: File, config: {
             options = row[config.optionsColumn].split('/').map(o => o.trim()).filter(o => o);
           }
           
-          data.push({
+          const item = {
             id: row[config.idColumn],
             text: row[config.textColumn],
             options: options.length > 0 ? options : undefined,
@@ -67,7 +79,12 @@ export const parseQuestionsCsv = (file: File, config: {
             purpose: config.purposeColumn ? row[config.purposeColumn] : undefined,
             type: config.typeColumn ? row[config.typeColumn] : undefined,
             typeName: config.typeNameColumn ? row[config.typeNameColumn] : undefined,
-          } as QuestionItem);
+          } as QuestionItem;
+          
+          console.log(`Row ${i}:`, row);
+          console.log(`Parsed item:`, item);
+          
+          data.push(item);
         }
         
         resolve(data);

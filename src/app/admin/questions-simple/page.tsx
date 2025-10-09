@@ -71,6 +71,9 @@ export default function AdminQuestionsSimplePage() {
           typeColumn: "type",
           typeNameColumn: "type_name"
         });
+        
+        console.log('Parsed main survey items:', items.length);
+        console.log('Sample item:', items[0]);
 
         // Supabase에 저장
         const mainQuestions = items.map(item => ({
