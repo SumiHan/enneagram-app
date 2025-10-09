@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useProgress } from "@/lib/progress-context";
 import { ProgressCard } from "@/components/ProgressCard";
-import { apiGetProgress, apiGetReportStatus } from "@/lib/api";
+import { apiGetProgress, apiGetReportStatus, apiGetPreResponse, apiGetMainResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useSurveyStatus } from "@/hooks/useSurveyStatus";
 import { DebugPanel } from "@/components/DebugPanel";
@@ -15,6 +15,8 @@ export default function HomePage() {
   const [hydrated, setHydrated] = useState(false);
   const [reportStatus, setReportStatus] = useState<'not_started' | 'completed'>('not_started');
   const [loadingReport, setLoadingReport] = useState(true);
+  const [preAnswerCount, setPreAnswerCount] = useState(0);
+  const [mainAnswerCount, setMainAnswerCount] = useState(0);
   
   // Use DB-based survey status hooks (single source of truth)
   const preStatus = useSurveyStatus(userId, 'pre');
@@ -48,32 +50,58 @@ export default function HomePage() {
     setHydrated(true);
   }, [progress, reload, user, authLoading, router]);
 
-  // Load report status from DB
+  // Load report status and answer counts from DB
   useEffect(() => {
     if (!userId) {
       setLoadingReport(false);
       return;
     }
 
-    const loadReportStatus = async () => {
+    const loadData = async () => {
       setLoadingReport(true);
       try {
+        // Load report status
         const status = await apiGetReportStatus(userId);
         console.log('[HomePage] Report status from DB:', status);
         setReportStatus(status);
+        
+        // Load pre-survey answer count
+        const preResponse = await apiGetPreResponse(userId);
+        const preCount = Object.keys(preResponse.answers || {}).length;
+        setPreAnswerCount(preCount);
+        console.log('[HomePage] Pre-survey answer count:', preCount);
+        
+        // Load main-survey answer count
+        const mainResponse = await apiGetMainResponse(userId);
+        const mainCount = Object.keys(mainResponse.answers || {}).length;
+        setMainAnswerCount(mainCount);
+        console.log('[HomePage] Main-survey answer count:', mainCount);
       } catch (error) {
-        console.error('[HomePage] Error loading report status:', error);
+        console.error('[HomePage] Error loading data:', error);
         setReportStatus('not_started');
+        setPreAnswerCount(0);
+        setMainAnswerCount(0);
       } finally {
         setLoadingReport(false);
       }
     };
 
-    loadReportStatus();
+    loadData();
   }, [userId]);
 
-  const prePct = progress ? Math.round((progress.pre_survey.answered_count / progress.pre_survey.total_count) * 100) : 0;
-  const mainPct = progress ? Math.round((progress.main_survey.sets / progress.main_survey.total_sets) * 100) : 0;
+  // Calculate progress text
+  const preTotal = progress?.pre_survey.total_count || 20;
+  const mainTotal = 90; // Total 90 questions
+  
+  const preProgressText = 
+    preStatus.status === 'completed' ? `(${preTotal}/${preTotal})` :
+    preStatus.status === 'in_progress' ? `(${preAnswerCount}/${preTotal})` :
+    `(0/${preTotal})`;
+  
+  const mainProgressText = 
+    mainStatus.status === 'completed' ? `(${mainTotal}/${mainTotal})` :
+    mainStatus.status === 'in_progress' ? `(${mainAnswerCount}/${mainTotal})` :
+    `(0/${mainTotal})`;
 
   // Show loading state
   if (authLoading || preStatus.loading || mainStatus.loading || loadingReport) {
@@ -104,7 +132,7 @@ export default function HomePage() {
             preStatus.status === 'in_progress' ? 'IN_PROGRESS' :
             'NOT_STARTED'
           }
-          progressPct={prePct}
+          progressText={preProgressText}
           actionLabel={
             preStatus.status === 'in_progress' ? "이어하기" :
             preStatus.status === 'completed' ? "수정하기" :
@@ -120,7 +148,7 @@ export default function HomePage() {
             mainStatus.status === 'in_progress' ? 'IN_PROGRESS' :
             'NOT_STARTED'
           }
-          progressPct={mainPct}
+          progressText={mainProgressText}
           actionLabel={
             mainStatus.status === 'in_progress' ? "이어하기" :
             mainStatus.status === 'completed' ? "수정하기" :
@@ -134,7 +162,6 @@ export default function HomePage() {
             title="결과 리포트"
             description="유형, 특징, 직업 추천 3개를 확인합니다."
             status={reportStatus === 'completed' ? 'COMPLETED' : 'NOT_STARTED'}
-            progressPct={reportStatus === 'completed' ? 100 : 0}
             actionLabel={reportStatus === 'completed' ? "보기" : "생성하기"}
             onAction={() => router.push("/report")}
             disabled={mainStatus.status !== 'completed'}
