@@ -128,9 +128,29 @@ function ReportContent() {
             )}
           </div>
         ) : (
-          <div className="flex items-center justify-between">
-            <p className="text-slate-600">리포트를 생성하여 결과를 확인하세요.</p>
-            <button className="btn btn-primary" onClick={onGenerate} disabled={disabled || loading}>{loading ? "생성 중..." : "리포트 생성"}</button>
+          <div className="flex flex-col items-center justify-center py-8 gap-4">
+            {loading ? (
+              <>
+                <div className="animate-pulse text-center">
+                  <div className="text-lg font-medium text-slate-700 mb-2">
+                    생성형 AI가 리포트를 만들고 있어요. 잠시만 기다려주세요 😀
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    평균 10-20초 정도 소요됩니다
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-slate-600">리포트를 생성하여 결과를 확인하세요.</p>
+                <button className="btn btn-primary" onClick={onGenerate} disabled={disabled}>리포트 생성</button>
+              </>
+            )}
           </div>
         )}
       </div>
