@@ -281,14 +281,76 @@ export default function MainSurveyPage() {
         </div>
       </div>
 
-      <div className="space-y-4">
+      {/* 선택 가이드라인 */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
+        <div className="text-center mb-3">
+          <div className="text-sm font-medium text-slate-700 mb-2">
+            📋 아래 중에서 본인에게 해당되는 정도를 선택해주세요
+          </div>
+        </div>
+        
+        {/* 데스크톱용 레이블 (항상 표시) */}
+        <div className="hidden sm:grid grid-cols-6 gap-2 text-center text-xs">
+          <div className="flex flex-col items-center gap-1">
+            <div className="w-6 h-6 rounded-full" style={{ backgroundColor: '#F87171' }}></div>
+            <span className="font-medium text-slate-700">전혀<br/>그렇지 않다</span>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <div className="w-6 h-6 rounded-full" style={{ backgroundColor: '#FB923C' }}></div>
+            <span className="font-medium text-slate-700">그렇지<br/>않다</span>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <div className="w-6 h-6 rounded-full" style={{ backgroundColor: '#FBBF24' }}></div>
+            <span className="font-medium text-slate-700">약간<br/>그렇지 않다</span>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <div className="w-6 h-6 rounded-full" style={{ backgroundColor: '#86EFAC' }}></div>
+            <span className="font-medium text-slate-700">약간<br/>그렇다</span>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <div className="w-6 h-6 rounded-full" style={{ backgroundColor: '#34D399' }}></div>
+            <span className="font-medium text-slate-700">그렇다</span>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <div className="w-6 h-6 rounded-full" style={{ backgroundColor: '#10B981' }}></div>
+            <span className="font-medium text-slate-700">매우<br/>그렇다</span>
+          </div>
+        </div>
+        
+        {/* 모바일용 간단 가이드 */}
+        <div className="sm:hidden flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded-full" style={{ backgroundColor: '#F87171' }}></div>
+            <span className="text-slate-600">부정</span>
+          </div>
+          <span className="text-slate-400">←</span>
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded-full" style={{ backgroundColor: '#FBBF24' }}></div>
+            <span className="text-slate-600">중립</span>
+          </div>
+          <span className="text-slate-400">→</span>
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded-full" style={{ backgroundColor: '#10B981' }}></div>
+            <span className="text-slate-600">긍정</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-5">
         {questions.map((question, questionIndex) => (
-          <div key={question.id} className="card p-4">
-            <div className="mb-3">
-              <span className="text-sm text-slate-500">
-                {currentPage * 30 + questionIndex + 1}번 문항
-              </span>
-              <div className="text-slate-700 mt-1">{question.text}</div>
+          <div key={question.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">
+                  {currentPage * 30 + questionIndex + 1}
+                </span>
+                <span className="text-xs text-slate-500">
+                  / {shuffledQuestions.length}
+                </span>
+              </div>
+              <div className="text-base font-medium text-slate-800 leading-relaxed">
+                {question.text}
+              </div>
             </div>
             <Likert 
               value={answers[question.id]} 
