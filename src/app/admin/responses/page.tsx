@@ -205,7 +205,7 @@ export default function AdminResponsesPage() {
           .from('reports')
           .select('*')
           .eq('user_id', userData.id)
-          .order('created_at', { ascending: false })
+          .order('id', { ascending: false }) // Use id instead of created_at
           .limit(1)
           .maybeSingle(); // Use maybeSingle instead of single to handle no data gracefully
         
@@ -268,13 +268,18 @@ export default function AdminResponsesPage() {
   // Function to get fresh report data for selected user
   const getFreshReportData = async (userId: string) => {
     try {
-      const { data: reportData } = await supabase
+      const { data: reportData, error: reportError } = await supabase
         .from('reports')
         .select('*')
         .eq('user_id', userId)
-        .order('created_at', { ascending: false })
+        .order('id', { ascending: false }) // Use id instead of created_at
         .limit(1)
         .maybeSingle();
+      
+      if (reportError) {
+        console.error(`Error fetching fresh report data for user ${userId}:`, reportError);
+        return null;
+      }
       
       console.log(`Fresh report data for user ${userId}:`, reportData);
       return reportData;
@@ -623,7 +628,14 @@ export default function AdminResponsesPage() {
                       <div className="card p-4 bg-slate-50">
                         <h4 className="font-semibold">생성 정보</h4>
                         <p className="mt-2 text-sm text-slate-600">
-                          생성일: {new Date(currentReportData.created_at || currentReportData.generated_at).toLocaleString('ko-KR')}
+                          생성일: {currentReportData.created_at 
+                            ? new Date(currentReportData.created_at).toLocaleString('ko-KR')
+                            : currentReportData.generated_at 
+                            ? new Date(currentReportData.generated_at).toLocaleString('ko-KR')
+                            : currentReportData.id 
+                            ? `ID: ${currentReportData.id}`
+                            : '정보 없음'
+                          }
                         </p>
                       </div>
                     </>
