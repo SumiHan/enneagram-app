@@ -405,6 +405,8 @@ export async function apiGenerateReport(userId: string) {
       enneagram_type: aiResult.enneagram_type,
       characteristics: aiResult.characteristics,
       job_recommendations: aiResult.job_recommendations,
+      career_guidance: aiResult.career_guidance,
+      growth_advice: aiResult.growth_advice,
     };
 
     // Upsert report (only one report per user)
@@ -446,6 +448,8 @@ export async function apiGenerateReport(userId: string) {
         type: data.enneagram_type,
         characteristics: data.characteristics,
         job_recommendations: data.job_recommendations,
+        career_guidance: data.career_guidance,
+        growth_advice: data.growth_advice,
         generated_at: data.generated_at,
       }
     });
@@ -457,6 +461,8 @@ export async function apiGenerateReport(userId: string) {
       type: data.enneagram_type,
       characteristics: data.characteristics,
       job_recommendations: data.job_recommendations,
+      career_guidance: data.career_guidance,
+      growth_advice: data.growth_advice,
       generated_at: data.generated_at,
     };
   } catch (error) {
