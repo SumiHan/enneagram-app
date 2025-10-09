@@ -478,7 +478,7 @@ export async function apiGetLatestReport(userId: string) {
       .from('reports')
       .select('*')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     if (error || !data) return null;
 
