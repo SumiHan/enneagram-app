@@ -132,8 +132,24 @@ export default function AdminResponsesPage() {
         .from('main_survey_questions')
         .select('*');
       
-      setPreQuestions(preQData || []);
-      setMainQuestions(mainQData || []);
+      // Map question data to use q_id as id and text_ko as text
+      const mappedPreQuestions = (preQData || []).map(q => ({
+        ...q,
+        id: q.q_id, // Use q_id as the id field
+        text: q.text_ko // Use text_ko as the text field
+      }));
+      
+      const mappedMainQuestions = (mainQData || []).map(q => ({
+        ...q,
+        id: q.q_id, // Use q_id as the id field
+        text: q.text_ko // Use text_ko as the text field
+      }));
+      
+      console.log('Mapped pre questions:', mappedPreQuestions.slice(0, 2));
+      console.log('Mapped main questions:', mappedMainQuestions.slice(0, 2));
+      
+      setPreQuestions(mappedPreQuestions);
+      setMainQuestions(mappedMainQuestions);
       
       console.log('Loaded questions from Supabase:', {
         pre: preQData?.length || 0,
@@ -300,12 +316,14 @@ export default function AdminResponsesPage() {
       return `${answer.q_id}: ${answer.value} (질문 텍스트 없음)`;
     }
     
+    // Check if question has options (for pre-survey) or use Likert scale (for main-survey)
     if (question.options && question.options.length > 0) {
       const idx = parseInt(String(answer.value)) - 1;
       const optionText = question.options[idx];
       console.log('Using options:', { idx, optionText, options: question.options });
       return optionText || `선택 ${answer.value}`;
     } else {
+      // For main survey (Likert scale 1-6)
       const likertLabels = ["전혀 그렇지 않다", "그렇지 않다", "약간 그렇지 않다", "약간 그렇다", "그렇다", "매우 그렇다"];
       const likertText = likertLabels[parseInt(String(answer.value)) - 1] || String(answer.value);
       console.log('Using Likert scale:', { value: answer.value, likertText });
@@ -543,6 +561,7 @@ export default function AdminResponsesPage() {
                     <p>사전 설문 문항 수: {preQuestions.length}</p>
                     <p>사용자 응답 수: {selectedRecord.preAnswers.length}</p>
                     <p>사용자 응답: {JSON.stringify(selectedRecord.preAnswers.slice(0, 2))}</p>
+                    <p>매핑된 질문 샘플: {JSON.stringify(preQuestions.slice(0, 1).map(q => ({id: q.id, text: q.text?.substring(0, 50)})))}</p>
                   </div>
                   <table className="w-full text-sm border-collapse">
                     <thead>
@@ -576,6 +595,7 @@ export default function AdminResponsesPage() {
                     <p>본 설문 문항 수: {mainQuestions.length}</p>
                     <p>사용자 응답 수: {selectedRecord.mainAnswers.length}</p>
                     <p>사용자 응답: {JSON.stringify(selectedRecord.mainAnswers.slice(0, 2))}</p>
+                    <p>매핑된 질문 샘플: {JSON.stringify(mainQuestions.slice(0, 1).map(q => ({id: q.id, text: q.text?.substring(0, 50)})))}</p>
                   </div>
                   <table className="w-full text-sm border-collapse">
                     <thead>
