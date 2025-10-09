@@ -73,7 +73,11 @@ export default function HomePage() {
         <ProgressCard
           title="사전 설문"
           description="간단한 준비 설문입니다. 완료 후 본 설문이 활성화됩니다."
-          status={progress?.pre_survey.status ?? "NOT_STARTED"}
+          status={
+            preStatus.status === 'completed' ? 'COMPLETED' :
+            preStatus.status === 'in_progress' ? 'IN_PROGRESS' :
+            'NOT_STARTED'
+          }
           progressPct={prePct}
           actionLabel={
             preStatus.status === 'in_progress' ? "이어하기" :
@@ -85,7 +89,11 @@ export default function HomePage() {
         <ProgressCard
           title="본 설문"
           description="에니어그램 성향을 분석하는 본 설문입니다."
-          status={progress?.main_survey.status ?? "NOT_STARTED"}
+          status={
+            mainStatus.status === 'completed' ? 'COMPLETED' :
+            mainStatus.status === 'in_progress' ? 'IN_PROGRESS' :
+            'NOT_STARTED'
+          }
           progressPct={mainPct}
           actionLabel={
             mainStatus.status === 'in_progress' ? "이어하기" :
