@@ -330,16 +330,25 @@ export async function apiCompleteMain(userId: string) {
 
 export async function apiGetReportStatus(userId: string): Promise<'not_started' | 'completed'> {
   try {
+    console.log('[apiGetReportStatus] Checking for userId:', userId);
+    
     const { data, error } = await supabase
       .from('reports')
-      .select('id, enneagram_type')
+      .select('id, enneagram_type, user_id')
       .eq('user_id', userId)
       .maybeSingle();
 
-    if (error) throw error;
+    console.log('[apiGetReportStatus] Query result:', { data, error });
+
+    if (error) {
+      console.error('[apiGetReportStatus] Error:', error);
+      throw error;
+    }
 
     // Check if report exists AND has meaningful data
     const hasReport = data && data.id && data.enneagram_type;
+    console.log('[apiGetReportStatus] Has report:', hasReport, 'Data:', data);
+    
     return hasReport ? 'completed' : 'not_started';
   } catch (error) {
     console.error('Error getting report status:', error);

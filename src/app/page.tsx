@@ -55,8 +55,11 @@ export default function HomePage() {
 
     setLoadingReport(true);
     try {
+      console.log('[HomePage] Loading data for userId:', userId);
+      
       // Load report status
       const status = await apiGetReportStatus(userId);
+      console.log('[HomePage] Report status:', status);
       setReportStatus(status);
       
       // Load pre-survey answer count
