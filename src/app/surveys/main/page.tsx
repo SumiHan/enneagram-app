@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Likert } from "@/components/Likert";
 import { MAIN_QUESTIONS_POOL } from "@/data/questions";
 import { getMainSurveyQuestions } from "@/lib/survey-questions";
+import type { QuestionItem } from "@/lib/types";
 import { mulberry32, shuffleDeterministic } from "@/lib/rng";
 import { apiCompleteMain, apiPatchMainAnswers, apiStartMainSession } from "@/lib/api";
 import { useProgress } from "@/lib/progress-context";
@@ -35,7 +36,7 @@ export default function MainSurveyPage() {
     }
   }, [progress, reload, router, userId]);
 
-  const [allQuestions, setAllQuestions] = useState(MAIN_QUESTIONS_POOL);
+  const [allQuestions, setAllQuestions] = useState<QuestionItem[] | null>(null);
 
   useEffect(() => {
     // Load questions from Supabase
@@ -53,7 +54,7 @@ export default function MainSurveyPage() {
   }, []);
 
   const shuffledQuestions = useMemo(() => {
-    if (seed == null || allQuestions.length === 0) return [] as typeof MAIN_QUESTIONS_POOL;
+    if (seed == null || !allQuestions || allQuestions.length === 0) return [] as typeof MAIN_QUESTIONS_POOL;
     const shuffled = shuffleDeterministic(allQuestions, seed);
     return shuffled.slice(0, 90); // 90 questions total
   }, [allQuestions, seed]);
@@ -71,7 +72,7 @@ export default function MainSurveyPage() {
   console.log('=== DEBUG INFO ===');
   console.log('Current page:', currentPage);
   console.log('Page range:', currentPage === 0 ? '1-30번' : currentPage === 1 ? '31-60번' : '61-90번');
-  console.log('All questions length:', allQuestions.length);
+  console.log('All questions length:', allQuestions?.length || 0);
   console.log('Questions length:', questions.length);
   console.log('Answers count:', Object.keys(answers).length);
   console.log('Current page question count:', currentPageQuestionCount);
@@ -151,10 +152,10 @@ export default function MainSurveyPage() {
   useEffect(() => {
     console.log('useEffect triggered for loading answers');
     console.log('progress?.main_survey:', !!progress?.main_survey);
-    console.log('allQuestions.length:', allQuestions.length);
+    console.log('allQuestions.length:', allQuestions?.length || 0);
     console.log('currentPage:', currentPage);
     
-    if (!progress?.main_survey || !allQuestions.length) return;
+    if (!progress?.main_survey || !allQuestions || !allQuestions.length) return;
     
     // Load answers from localStorage for current page
     const surveyKey = `survey.main.v1:${userId}`;
@@ -191,6 +192,19 @@ export default function MainSurveyPage() {
     router.push("/");
   };
 
+
+  // 로딩 중일 때 표시
+  if (!allQuestions) {
+    return (
+      <div className="flex flex-col gap-6">
+        <button className="btn btn-outline w-fit" onClick={() => router.back()}>← 홈</button>
+        <h2 className="text-xl font-semibold">본 설문</h2>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-slate-600">질문을 불러오는 중...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">

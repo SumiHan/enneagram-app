@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation";
 import { PRE_QUESTIONS } from "@/data/questions";
 import { getPreSurveyQuestions } from "@/lib/survey-questions";
+import type { QuestionItem } from "@/lib/types";
 import { RadioOptions } from "@/components/RadioOptions";
 import { apiCompletePre, apiPatchPreAnswers } from "@/lib/api";
 import { useProgress } from "@/lib/progress-context";
@@ -13,7 +14,7 @@ export default function PreSurveyPage() {
   const [answers, setAnswers] = useState<Record<string, string | null>>({});
   const saveTimer = useRef<number | null>(null);
 
-  const [preList, setPreList] = useState(PRE_QUESTIONS);
+  const [preList, setPreList] = useState<QuestionItem[] | null>(null);
 
   useEffect(() => {
     // Load questions from Supabase
@@ -32,7 +33,7 @@ export default function PreSurveyPage() {
 
   useEffect(() => {
     // Load existing answers from localStorage (after questions are loaded)
-    if (typeof window === 'undefined' || preList.length === 0) return;
+    if (typeof window === 'undefined' || !preList || preList.length === 0) return;
     
     const surveyKey = `survey.pre.v1:${userId}`;
     const existingSurvey = localStorage.getItem(surveyKey);
@@ -67,7 +68,7 @@ export default function PreSurveyPage() {
   }, [userId, preList]);
 
   const validAnswerCount = Object.keys(answers).filter(id => answers[id] !== null).length;
-  const pct = Math.round((validAnswerCount / preList.length) * 100);
+  const pct = Math.round((validAnswerCount / (preList?.length || 1)) * 100);
 
   const onSelect = (qId: string, value: string | null) => {
     console.log(`onSelect called: qId=${qId}, value=${value}`);
@@ -92,7 +93,7 @@ export default function PreSurveyPage() {
       // Trigger save with updated state
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(async () => {
-        const payload = preList
+        const payload = (preList || [])
           .map((q) => {
             const selected = next[q.id];
             
@@ -114,7 +115,7 @@ export default function PreSurveyPage() {
           .filter((a): a is { q_id: string; value: number; ts: number } => a !== null);
         
         console.log('Saving pre-survey answers:');
-        console.log('Total questions:', preList.length);
+        console.log('Total questions:', preList?.length || 0);
         console.log('Valid answers to save:', payload.length);
         console.log('Payload:', payload);
         
@@ -131,6 +132,19 @@ export default function PreSurveyPage() {
     await reload();
     router.push("/");
   };
+
+  // 로딩 중일 때 표시
+  if (!preList) {
+    return (
+      <div className="flex flex-col gap-6">
+        <button className="btn btn-outline w-fit" onClick={() => router.back()}>← 홈</button>
+        <h2 className="text-xl font-semibold">사전 설문</h2>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-slate-600">질문을 불러오는 중...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -166,8 +180,8 @@ export default function PreSurveyPage() {
         {/* 완료 버튼 섹션 */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between text-sm text-slate-500">
-            <span>완료율: {pct}% ({validAnswerCount}/{preList.length})</span>
-            <button className="btn btn-primary" onClick={onComplete} disabled={validAnswerCount < preList.length}>완료</button>
+            <span>완료율: {pct}% ({validAnswerCount}/{preList?.length || 0})</span>
+            <button className="btn btn-primary" onClick={onComplete} disabled={validAnswerCount < (preList?.length || 0)}>완료</button>
           </div>
         </div>
       </div>
