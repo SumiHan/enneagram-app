@@ -111,6 +111,13 @@ CREATE POLICY "Admins can update ai_settings"
       WHERE users.id = auth.uid()
       AND users.role = 'admin'
     )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.users
+      WHERE users.id = auth.uid()
+      AND users.role = 'admin'
+    )
   );
 
 -- Trigger to update updated_at timestamp
