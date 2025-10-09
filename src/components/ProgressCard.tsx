@@ -11,30 +11,37 @@ type Props = {
 };
 
 export function ProgressCard({ title, description, status, progressText, actionLabel, onAction, disabled }: Props) {
-  // 상태별 색상 설정
-  const getStatusColor = () => {
+  // 상태별 색상과 텍스트 설정
+  const getStatusInfo = () => {
     switch (status) {
       case 'NOT_STARTED':
-        return 'text-gray-400';
+        return { color: 'text-gray-400', text: 'Not Started' };
       case 'IN_PROGRESS':
-        return 'text-blue-500';
+        return { color: 'text-blue-500', text: 'In Progress' };
       case 'COMPLETED':
-        return 'text-green-600';
+        return { color: 'text-green-600', text: 'Completed' };
       default:
-        return 'text-gray-400';
+        return { color: 'text-gray-400', text: 'Not Started' };
     }
   };
+
+  const statusInfo = getStatusInfo();
 
   return (
     <div className="card p-5 flex flex-col justify-between min-h-[160px]">
       {/* 상단: 제목과 상태 */}
       <div className="flex items-start justify-between mb-2">
         <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
-        {progressText && (
-          <span className={`text-sm font-medium ${getStatusColor()}`}>
-            {progressText}
-          </span>
-        )}
+        <div className="text-right">
+          <div className={`text-xs font-medium ${statusInfo.color}`}>
+            {statusInfo.text}
+          </div>
+          {progressText && (
+            <div className={`text-sm font-medium ${statusInfo.color}`}>
+              {progressText}
+            </div>
+          )}
+        </div>
       </div>
       
       {/* 중간: 설명 */}
