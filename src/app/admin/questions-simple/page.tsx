@@ -68,8 +68,8 @@ export default function AdminQuestionsSimplePage() {
         const items = await parseQuestionsCsv(file, {
           idColumn: "q_id",
           textColumn: "text_ko",
-          typeColumn: "type",
-          typeNameColumn: "type_name"
+          typeColumn: "유형",
+          typeNameColumn: "유형명"
         });
         
         console.log('Parsed main survey items:', items.length);
@@ -192,8 +192,8 @@ export default function AdminQuestionsSimplePage() {
                 </>
               ) : (
                 <>
-                  <div>• <strong>type</strong>: 유형 코드</div>
-                  <div>• <strong>type_name</strong>: 유형명</div>
+                  <div>• <strong>유형</strong>: 유형 코드 (숫자)</div>
+                  <div>• <strong>유형명</strong>: 유형명 (예: 개혁가 (Reformer))</div>
                   <div>• <strong>q_id</strong>: 문항 고유 ID</div>
                   <div>• <strong>text_ko</strong>: 문항 내용 (한글)</div>
                 </>
