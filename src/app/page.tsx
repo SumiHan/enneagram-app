@@ -28,26 +28,18 @@ export default function HomePage() {
 
   useEffect(() => {
     // Wait for auth to load
-    if (authLoading) {
-      console.log('Auth loading...');
-      return;
-    }
-    
-    console.log('Auth loaded, user:', user);
+    if (authLoading) return;
     
     if (!user) {
-      console.log('No user, redirecting to login');
       router.replace("/login");
       return;
     }
     
     if (user.role === "admin") {
-      console.log('Admin user, redirecting to dashboard');
       router.replace("/admin/dashboard");
       return;
     }
     
-    console.log('Regular user, loading progress');
     // ensure progress loaded
     if (!progress) reload();
     
@@ -65,20 +57,17 @@ export default function HomePage() {
     try {
       // Load report status
       const status = await apiGetReportStatus(userId);
-      console.log('[HomePage] Report status from DB:', status);
       setReportStatus(status);
       
       // Load pre-survey answer count
       const preResponse = await apiGetPreResponse(userId);
       const preCount = Object.keys(preResponse.answers || {}).length;
       setPreAnswerCount(preCount);
-      console.log('[HomePage] Pre-survey answer count:', preCount);
       
       // Load main-survey answer count
       const mainResponse = await apiGetMainResponse(userId);
       const mainCount = Object.keys(mainResponse.answers || {}).length;
       setMainAnswerCount(mainCount);
-      console.log('[HomePage] Main-survey answer count:', mainCount);
     } catch (error) {
       console.error('[HomePage] Error loading data:', error);
       setReportStatus('not_started');
@@ -90,8 +79,17 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    loadData();
+    if (userId) {
+      loadData();
+    }
   }, [userId]);
+  
+  // Also load on mount to ensure fresh data
+  useEffect(() => {
+    if (userId && hydrated) {
+      loadData();
+    }
+  }, [hydrated]);
 
   // Listen for report generation events
   useEffect(() => {

@@ -30,13 +30,23 @@ function ReportContent() {
   }, [userId, reload]);
 
   useEffect(() => {
+    // Always try to load report from DB (don't rely on progress.report.status)
     (async () => {
-      if (progress?.report.status === "COMPLETED") {
+      if (!userId) return;
+      
+      setLoading(true);
+      try {
         const r = await apiGetLatestReport(userId);
-        setReport(r);
+        if (r) {
+          setReport(r);
+        }
+      } catch (error) {
+        console.error('Error loading report:', error);
+      } finally {
+        setLoading(false);
       }
     })();
-  }, [progress, userId]);
+  }, [userId]);
 
   // Auto-generate report if ?generate=true is in URL
   useEffect(() => {

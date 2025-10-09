@@ -332,13 +332,15 @@ export async function apiGetReportStatus(userId: string): Promise<'not_started' 
   try {
     const { data, error } = await supabase
       .from('reports')
-      .select('id, generated_at')
+      .select('id, enneagram_type')
       .eq('user_id', userId)
       .maybeSingle();
 
     if (error) throw error;
 
-    return data ? 'completed' : 'not_started';
+    // Check if report exists AND has meaningful data
+    const hasReport = data && data.id && data.enneagram_type;
+    return hasReport ? 'completed' : 'not_started';
   } catch (error) {
     console.error('Error getting report status:', error);
     return 'not_started';
