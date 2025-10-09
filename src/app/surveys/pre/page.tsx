@@ -136,21 +136,39 @@ export default function PreSurveyPage() {
     <div className="flex flex-col gap-6">
       <button className="btn btn-outline w-fit" onClick={() => router.back()}>← 홈</button>
       <h2 className="text-xl font-semibold">사전 설문</h2>
-      <div className="card p-6 flex flex-col gap-6">
-        {preList.map((q) => (
-          <div key={q.id} className="flex flex-col gap-3">
-            <div className="text-slate-800 font-medium">{q.text}</div>
-            <RadioOptions
-              name={q.id}
-              options={q.options ?? ["예", "아니오"]}
-              selected={answers[q.id] ?? null}
-              onSelect={(val) => onSelect(q.id, val)}
-            />
+      <div className="flex flex-col gap-6">
+        {preList.map((q, index) => (
+          <div key={q.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div className="flex flex-col gap-4">
+              {/* 문항 번호와 질문 텍스트 */}
+              <div className="flex flex-col gap-2">
+                <div className="text-sm font-medium text-slate-500">
+                  문항 {index + 1} / {preList.length}
+                </div>
+                <div className="text-lg font-semibold text-slate-800 leading-relaxed">
+                  {q.text}
+                </div>
+              </div>
+              
+              {/* 선택 옵션들 */}
+              <div className="mt-2">
+                <RadioOptions
+                  name={q.id}
+                  options={q.options ?? ["예", "아니오"]}
+                  selected={answers[q.id] ?? null}
+                  onSelect={(val) => onSelect(q.id, val)}
+                />
+              </div>
+            </div>
           </div>
         ))}
-        <div className="flex items-center justify-between text-sm text-slate-500">
-          <span>완료율: {pct}% ({validAnswerCount}/{preList.length})</span>
-          <button className="btn btn-primary" onClick={onComplete} disabled={validAnswerCount < preList.length}>완료</button>
+        
+        {/* 완료 버튼 섹션 */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <div className="flex items-center justify-between text-sm text-slate-500">
+            <span>완료율: {pct}% ({validAnswerCount}/{preList.length})</span>
+            <button className="btn btn-primary" onClick={onComplete} disabled={validAnswerCount < preList.length}>완료</button>
+          </div>
         </div>
       </div>
     </div>

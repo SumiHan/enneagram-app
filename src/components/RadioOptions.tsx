@@ -47,17 +47,17 @@ export function RadioOptions({ name, options, selected, onSelect }: Props) {
   };
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-3">
       {normalizedOptions.map((opt, i) => {
         const isSelected = selected?.trim() === opt.value.trim();
         return (
           <button
             key={`${name}-${opt.value}-${i}`}
             type="button"
-            className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
+            className={`px-5 py-3 rounded-lg border text-sm font-medium transition-all min-w-[120px] ${
               isSelected 
                 ? "bg-blue-500 border-blue-500 text-white shadow-md" 
-                : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400"
+                : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 hover:shadow-sm"
             }`}
             onClick={() => handleClick(opt.value)}
           >
