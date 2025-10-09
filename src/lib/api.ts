@@ -347,8 +347,6 @@ export async function apiGetReportStatus(userId: string): Promise<'not_started' 
 
 export async function apiGenerateReport(userId: string) {
   try {
-    console.log(`Starting report generation for user ${userId}`);
-    
     // 1. Get user's pre-survey and main-survey responses
     const { data: preResponse, error: preError } = await supabase
       .from('responses')
@@ -391,13 +389,9 @@ export async function apiGenerateReport(userId: string) {
       ts: Date.now()
     }));
 
-    console.log(`Pre-survey answers: ${preAnswers.length}, Main-survey answers: ${mainAnswers.length}`);
-
     // 2. Generate report using OpenAI
     const { generateReportWithOpenAI } = await import('./openai');
     const aiResult = await generateReportWithOpenAI(userId, preAnswers, mainAnswers);
-
-    console.log('AI Result:', aiResult);
 
     // 3. Save report to database
     const reportData = {
@@ -422,8 +416,6 @@ export async function apiGenerateReport(userId: string) {
       console.error('Error saving report:', error);
       throw error;
     }
-
-    console.log('Report saved to database:', data.id);
 
     // 4. Update progress
     const { error: progressError } = await supabase
@@ -453,8 +445,6 @@ export async function apiGenerateReport(userId: string) {
         generated_at: data.generated_at,
       }
     });
-
-    console.log(`Report generated for user ${userId}, emitting event`);
 
     return {
       id: data.id,

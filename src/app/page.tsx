@@ -6,7 +6,6 @@ import { ProgressCard } from "@/components/ProgressCard";
 import { apiGetProgress, apiGetReportStatus, apiGetPreResponse, apiGetMainResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useSurveyStatus } from "@/hooks/useSurveyStatus";
-import { DebugPanel } from "@/components/DebugPanel";
 import { eventBus, EVENTS } from "@/lib/event-bus";
 import { useRealtimeSubscription } from "@/lib/realtime";
 
@@ -97,18 +96,13 @@ export default function HomePage() {
   // Listen for report generation events
   useEffect(() => {
     const handleReportGenerated = (data: any) => {
-      console.log('[HomePage] Report generated event received:', data);
-      
       // Only update if it's for the current user
       if (data.userId === userId) {
         setReportStatus('completed');
-        console.log('[HomePage] Updated report status to completed');
       }
     };
 
     const handleDataUpdated = (data: any) => {
-      console.log('[HomePage] Data updated event received:', data);
-      
       // Refresh all data when any data is updated
       if (data.userId === userId) {
         loadData();
@@ -213,9 +207,6 @@ export default function HomePage() {
         </div>
       </div>
     </div>
-      
-      {/* Debug Panel - shows DB state on mobile */}
-      <DebugPanel surveyType="pre" status={preStatus.status} loading={preStatus.loading} />
     </>
   );
 }

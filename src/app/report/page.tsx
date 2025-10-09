@@ -22,7 +22,6 @@ function ReportContent() {
       
       // Emit data updated event for real-time UI updates
       eventBus.emit(EVENTS.DATA_UPDATED, { userId });
-      console.log(`Report generated for user ${userId}, emitted data updated event`);
     } catch (error) {
       console.error('Error generating report:', error);
     } finally {

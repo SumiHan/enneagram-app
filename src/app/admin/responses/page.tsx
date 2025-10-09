@@ -65,8 +65,6 @@ export default function AdminResponsesPage() {
   // Listen for report generation events
   useEffect(() => {
     const handleReportGenerated = (data: any) => {
-      console.log('[AdminResponses] Report generated event received:', data);
-      
       // Refresh data when any report is generated
       loadData();
       
@@ -79,8 +77,6 @@ export default function AdminResponsesPage() {
     };
 
     const handleDataUpdated = (data: any) => {
-      console.log('[AdminResponses] Data updated event received:', data);
-      
       // Refresh data when any data is updated
       loadData();
       
@@ -106,7 +102,6 @@ export default function AdminResponsesPage() {
   // Load fresh report data when report tab is activated
   useEffect(() => {
     if (selectedUser && activeTab === 'report') {
-      console.log(`Loading fresh report data for user: ${selectedUser}`);
       getFreshReportData(selectedUser).then(reportData => {
         setCurrentReportData(reportData);
       });
@@ -152,12 +147,6 @@ export default function AdminResponsesPage() {
         .eq('role', 'user'); // Only load users with role='user'
       
       if (usersError) throw usersError;
-      
-      console.log('Loaded user-role users for responses:', usersData?.length);
-      
-      // Debug: Check current authenticated user
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      console.log('Current authenticated user:', currentUser?.id, currentUser?.email);
       
       const userRecords: UserRecord[] = [];
       

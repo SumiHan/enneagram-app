@@ -83,36 +83,10 @@ export default function MainSurveyPage() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   }, [currentPage]);
-  
-  // Debug logging
-  console.log('=== DEBUG INFO ===');
-  console.log('Current page:', currentPage);
-  console.log('Page range:', currentPage === 0 ? '1-30번' : currentPage === 1 ? '31-60번' : '61-90번');
-  console.log('All questions length:', allQuestions?.length || 0);
-  console.log('Questions length:', questions.length);
-  console.log('Answers count:', Object.keys(answers).length);
-  console.log('Current page question count:', currentPageQuestionCount);
-  console.log('Answers object:', answers);
-  console.log('Questions IDs:', questions.map(q => q.id));
-  console.log('Answer keys:', Object.keys(answers));
-  
-  // Check for missing answers
-  const questionIds = questions.map(q => q.id);
-  const answerKeys = Object.keys(answers);
-  const missingAnswers = questionIds.filter(id => !answerKeys.includes(id));
-  const extraAnswers = answerKeys.filter(key => !questionIds.includes(key));
-  
-  console.log('Missing answers:', missingAnswers);
-  console.log('Extra answers:', extraAnswers);
-  console.log('==================');
 
   const onSelect = (questionId: string, value: number) => {
-    console.log('onSelect called:', questionId, value);
-    console.log('Current answers before:', Object.keys(answers).length);
-    
     // If the same value is selected, toggle it off (cancel selection)
     if (answers[questionId] === value) {
-      console.log('Toggling off answer for:', questionId);
       const nextCurrentPage = { ...answers };
       delete nextCurrentPage[questionId];
       setAnswers(nextCurrentPage);
@@ -131,7 +105,6 @@ export default function MainSurveyPage() {
       }, 500); // 500ms debounce
     } else {
       // Select new value
-      console.log('Setting new answer for:', questionId, 'to', value);
       const nextCurrentPage = { ...answers, [questionId]: value };
       setAnswers(nextCurrentPage);
       
@@ -160,15 +133,7 @@ export default function MainSurveyPage() {
 
 
   const onNextPage = () => {
-    console.log('onNextPage called');
-    console.log('Current page before:', currentPage);
-    console.log('Answers count:', Object.keys(answers).length);
-    console.log('Questions length:', questions.length);
-    console.log('Can proceed:', Object.keys(answers).length >= questions.length);
-    
     if (currentPage < 2 && Object.keys(answers).length >= questions.length) {
-      console.log('Moving to page:', currentPage + 1);
-      
       // Immediate scroll to top (multiple methods for reliability)
       window.scrollTo(0, 0);
       document.documentElement.scrollTop = 0;
@@ -181,8 +146,6 @@ export default function MainSurveyPage() {
       setTimeout(() => {
         window.scrollTo(0, 0);
       }, 0);
-    } else {
-      console.log('Cannot proceed - either at last page or not all questions answered');
     }
   };
 
@@ -205,18 +168,11 @@ export default function MainSurveyPage() {
 
   // Load existing answers from Supabase
   useEffect(() => {
-    console.log('useEffect triggered for loading answers');
-    console.log('progress?.main_survey:', !!progress?.main_survey);
-    console.log('allQuestions.length:', allQuestions?.length || 0);
-    console.log('currentPage:', currentPage);
-    console.log('questions.length:', questions.length);
-    
     if (!progress?.main_survey || !allQuestions || !allQuestions.length || !userId) return;
     
     const loadExistingAnswers = async () => {
       try {
         const response = await apiGetMainResponse(userId);
-        console.log('Loaded main-survey response:', response);
         
         if (response.answers && Object.keys(response.answers).length > 0) {
           // Store all answers
@@ -232,13 +188,9 @@ export default function MainSurveyPage() {
             }
           });
           
-          console.log('Current page question IDs:', currentPageQuestionIds);
-          console.log('Loaded all answers:', response.answers);
-          console.log('Loaded answers for current page:', currentPageAnswers);
           setAnswers(currentPageAnswers);
         } else {
           // No existing answers, start fresh
-          console.log('No existing answers, starting fresh');
           setAllAnswers({});
           setAnswers({});
         }

@@ -65,9 +65,6 @@ export async function generateReportWithOpenAI(
     const formattedPreSurvey = formatPreSurveyResponses(preAnswers, preQuestions || []);
     const formattedMainSurvey = formatMainSurveyResponses(mainAnswers, mainQuestions || []);
 
-    console.log('Formatted Pre Survey:', formattedPreSurvey.substring(0, 200));
-    console.log('Formatted Main Survey:', formattedMainSurvey.substring(0, 200));
-
     // 5. Replace placeholders in prompt with actual formatted data
     let finalPromptContent = prompt.content;
     
@@ -77,13 +74,6 @@ export async function generateReportWithOpenAI(
       .replace(/\{\{main_survey_responses\}\}/g, formattedMainSurvey)
       .replace(/\{\{사전_설문_응답\}\}/g, formattedPreSurvey)
       .replace(/\{\{본_설문_응답\}\}/g, formattedMainSurvey);
-
-    console.log('Calling OpenAI API with prompt:', {
-      promptTitle: prompt.title,
-      preAnswersCount: preAnswers.length,
-      mainAnswersCount: mainAnswers.length,
-      promptLength: finalPromptContent.length,
-    });
 
     // 6. Call OpenAI API with formatted prompt
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -112,14 +102,12 @@ export async function generateReportWithOpenAI(
     }
 
     const data = await response.json();
-    console.log('OpenAI API Response:', data);
 
     if (!data.choices || data.choices.length === 0) {
       throw new Error('OpenAI API 응답이 비어있습니다.');
     }
 
     const aiResponse = data.choices[0].message.content;
-    console.log('AI Generated Response:', aiResponse);
 
     // 7. Parse AI response
     // Try to parse as JSON first
