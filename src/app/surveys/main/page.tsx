@@ -6,7 +6,7 @@ import { MAIN_QUESTIONS_POOL } from "@/data/questions";
 import { getMainSurveyQuestions } from "@/lib/survey-questions";
 import type { QuestionItem } from "@/lib/types";
 import { mulberry32, shuffleDeterministic } from "@/lib/rng";
-import { apiCompleteMain, apiPatchMainAnswers, apiStartMainSession } from "@/lib/api";
+import { apiCompleteMain, apiPatchMainAnswers, apiStartMainSession, apiGetMainResponse } from "@/lib/api";
 import { useProgress } from "@/lib/progress-context";
 import { getLocalStorage } from "@/lib/storage";
 
@@ -14,7 +14,8 @@ export default function MainSurveyPage() {
   const router = useRouter();
   const { userId, progress, reload } = useProgress();
   const [seed, setSeed] = useState<number | null>(null);
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [answers, setAnswers] = useState<Record<string, number>>({}); // Current page answers
+  const [allAnswers, setAllAnswers] = useState<Record<string, number>>({}); // All answers across all pages
   const [currentPage, setCurrentPage] = useState(0);
   const saveTimer = useRef<number | null>(null);
 
@@ -97,30 +98,39 @@ export default function MainSurveyPage() {
     // If the same value is selected, toggle it off (cancel selection)
     if (answers[questionId] === value) {
       console.log('Toggling off answer for:', questionId);
-      const next = { ...answers };
-      delete next[questionId];
-      setAnswers(next);
+      const nextCurrentPage = { ...answers };
+      delete nextCurrentPage[questionId];
+      setAnswers(nextCurrentPage);
       
-      // Auto-save
+      // Update allAnswers as well
+      const nextAll = { ...allAnswers };
+      delete nextAll[questionId];
+      setAllAnswers(nextAll);
+      
+      // Auto-save all answers
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(async () => {
-        const payload = Object.entries(next).map(([q_id, value]) => ({ q_id, value, ts: Date.now() }));
+        const payload = Object.entries(nextAll).map(([q_id, value]) => ({ q_id, value, ts: Date.now() }));
         await apiPatchMainAnswers(userId, payload, { page: currentPage, index: 0 });
-        reload();
-      }, 800);
+        // Don't reload on every save
+      }, 500); // 500ms debounce
     } else {
       // Select new value
       console.log('Setting new answer for:', questionId, 'to', value);
-      const next = { ...answers, [questionId]: value };
-      setAnswers(next);
+      const nextCurrentPage = { ...answers, [questionId]: value };
+      setAnswers(nextCurrentPage);
       
-      // Auto-save
+      // Update allAnswers as well
+      const nextAll = { ...allAnswers, [questionId]: value };
+      setAllAnswers(nextAll);
+      
+      // Auto-save all answers
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(async () => {
-        const payload = Object.entries(next).map(([q_id, value]) => ({ q_id, value, ts: Date.now() }));
+        const payload = Object.entries(nextAll).map(([q_id, value]) => ({ q_id, value, ts: Date.now() }));
         await apiPatchMainAnswers(userId, payload, { page: currentPage, index: 0 });
-        reload();
-      }, 800);
+        // Don't reload on every save
+      }, 500); // 500ms debounce
     }
   };
 
@@ -148,43 +158,54 @@ export default function MainSurveyPage() {
     }
   };
 
-  // Load existing answers for current page
+  // Load existing answers from Supabase
   useEffect(() => {
     console.log('useEffect triggered for loading answers');
     console.log('progress?.main_survey:', !!progress?.main_survey);
     console.log('allQuestions.length:', allQuestions?.length || 0);
     console.log('currentPage:', currentPage);
+    console.log('questions.length:', questions.length);
     
-    if (!progress?.main_survey || !allQuestions || !allQuestions.length) return;
+    if (!progress?.main_survey || !allQuestions || !allQuestions.length || !userId) return;
     
-    // Load answers from localStorage for current page
-    const surveyKey = `survey.main.v1:${userId}`;
-    const existingSurvey = getLocalStorage<{ answers?: any[] } | null>(surveyKey, null);
-    console.log('Existing survey:', existingSurvey);
-    
-    if (existingSurvey?.answers) {
-      const currentPageAnswers: Record<string, number> = {};
-      
-      // Filter answers for current page - use current page's questions directly
-      const currentPageQuestionIds = questions.map(q => q.id);
-      console.log('Current page question IDs:', currentPageQuestionIds);
-      
-      existingSurvey.answers.forEach((answer: any) => {
-        const isInCurrentPage = currentPageQuestionIds.includes(answer.q_id);
-        console.log('Answer:', answer.q_id, 'is in current page:', isInCurrentPage);
-        if (isInCurrentPage) {
-          currentPageAnswers[answer.q_id] = answer.value;
+    const loadExistingAnswers = async () => {
+      try {
+        const response = await apiGetMainResponse(userId);
+        console.log('Loaded main-survey response:', response);
+        
+        if (response.answers && Object.keys(response.answers).length > 0) {
+          // Store all answers
+          setAllAnswers(response.answers);
+          
+          // Filter answers for current page
+          const currentPageQuestionIds = questions.map(q => q.id);
+          const currentPageAnswers: Record<string, number> = {};
+          
+          Object.entries(response.answers).forEach(([qId, value]) => {
+            if (currentPageQuestionIds.includes(qId)) {
+              currentPageAnswers[qId] = value;
+            }
+          });
+          
+          console.log('Current page question IDs:', currentPageQuestionIds);
+          console.log('Loaded all answers:', response.answers);
+          console.log('Loaded answers for current page:', currentPageAnswers);
+          setAnswers(currentPageAnswers);
+        } else {
+          // No existing answers, start fresh
+          console.log('No existing answers, starting fresh');
+          setAllAnswers({});
+          setAnswers({});
         }
-      });
-      
-      console.log('Loaded answers for current page:', currentPageAnswers);
-      setAnswers(currentPageAnswers);
-    } else {
-      // No existing answers, start fresh
-      console.log('No existing answers, starting fresh');
-      setAnswers({});
-    }
-  }, [currentPage, userId, allQuestions]); // progress 제거
+      } catch (error) {
+        console.error('Error loading existing main-survey:', error);
+        setAllAnswers({});
+        setAnswers({});
+      }
+    };
+    
+    loadExistingAnswers();
+  }, [currentPage, userId, allQuestions, questions]);
 
   const onComplete = async () => {
     await apiCompleteMain(userId);

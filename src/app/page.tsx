@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useProgress } from "@/lib/progress-context";
 import { ProgressCard } from "@/components/ProgressCard";
-import { apiGetProgress, apiGetPreResponse } from "@/lib/api";
+import { apiGetProgress, apiGetPreResponse, apiGetMainResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 export default function HomePage() {
@@ -12,6 +12,7 @@ export default function HomePage() {
   const { userId, progress, reload } = useProgress();
   const [hydrated, setHydrated] = useState(false);
   const [preResponseStatus, setPreResponseStatus] = useState<'in_progress' | 'completed' | null>(null);
+  const [mainResponseStatus, setMainResponseStatus] = useState<'in_progress' | 'completed' | null>(null);
 
   useEffect(() => {
     // Wait for auth to load
@@ -38,10 +39,14 @@ export default function HomePage() {
     // ensure progress loaded
     if (!progress) reload();
     
-    // Load pre-survey response status
+    // Load pre-survey and main-survey response status
     if (userId) {
       apiGetPreResponse(userId).then(response => {
         setPreResponseStatus(response.status);
+      });
+      
+      apiGetMainResponse(userId).then(response => {
+        setMainResponseStatus(response.status);
       });
     }
     
@@ -86,7 +91,11 @@ export default function HomePage() {
           description="에니어그램 성향을 분석하는 본 설문입니다."
           status={progress?.main_survey.status ?? "NOT_STARTED"}
           progressPct={mainPct}
-          actionLabel={progress?.main_survey.status === "IN_PROGRESS" ? "이어하기" : progress?.main_survey.status === "COMPLETED" ? "다시 보기" : "시작하기"}
+          actionLabel={
+            mainResponseStatus === 'in_progress' ? "이어하기" :
+            mainResponseStatus === 'completed' ? "수정하기" :
+            "시작하기"
+          }
           onAction={() => router.push("/surveys/main")}
           disabled={progress?.pre_survey.status !== "COMPLETED"}
         />

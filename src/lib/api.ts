@@ -198,24 +198,61 @@ export async function apiStartMainSession(userId: string, seed: number) {
   }
 }
 
+export async function apiGetMainResponse(userId: string): Promise<{ status: 'in_progress' | 'completed' | null, answers: Record<string, number>, currentPage?: number }> {
+  try {
+    const { data, error } = await supabase
+      .from('responses')
+      .select('status, answers')
+      .eq('user_id', userId)
+      .eq('survey_type', 'main')
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!data) {
+      return { status: null, answers: {}, currentPage: 0 };
+    }
+
+    // Get current page from user_progress
+    const { data: progressData } = await supabase
+      .from('user_progress')
+      .select('main_survey_current_page')
+      .eq('user_id', userId)
+      .single();
+
+    return {
+      status: data.status as 'in_progress' | 'completed',
+      answers: (data.answers as Record<string, number>) || {},
+      currentPage: progressData?.main_survey_current_page || 0,
+    };
+  } catch (error) {
+    console.error('Error getting main response:', error);
+    return { status: null, answers: {}, currentPage: 0 };
+  }
+}
+
 export async function apiPatchMainAnswers(
   userId: string,
   answers: SurveyAnswer[],
   lastPointer?: UserProgress["main_survey"]["last_pointer"]
 ) {
   try {
-    // Upsert answers
-    const answersToUpsert = answers.map(a => ({
-      user_id: userId,
-      survey_type: 'MAIN' as const,
-      q_id: a.q_id,
-      value: a.value,
-    }));
+    // Convert answers array to JSON object { q_id: value }
+    const answersJson: Record<string, number> = {};
+    answers.forEach(a => {
+      answersJson[a.q_id] = a.value;
+    });
 
+    // Upsert to responses table
     const { error } = await supabase
-      .from('survey_answers')
-      .upsert(answersToUpsert, {
-        onConflict: 'user_id,survey_type,q_id'
+      .from('responses')
+      .upsert({
+        user_id: userId,
+        survey_type: 'main',
+        status: 'in_progress',
+        answers: answersJson,
+      }, {
+        onConflict: 'user_id,survey_type'
       });
 
     if (error) throw error;
@@ -245,6 +282,18 @@ export async function apiPatchMainAnswers(
 
 export async function apiCompleteMain(userId: string) {
   try {
+    // Update responses table to 'completed'
+    const { error: responseError } = await supabase
+      .from('responses')
+      .update({
+        status: 'completed',
+      })
+      .eq('user_id', userId)
+      .eq('survey_type', 'main');
+
+    if (responseError) throw responseError;
+
+    // Update progress status
     const { error } = await supabase
       .from('user_progress')
       .update({
