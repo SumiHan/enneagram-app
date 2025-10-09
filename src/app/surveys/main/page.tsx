@@ -348,7 +348,7 @@ export default function MainSurveyPage() {
                   / {shuffledQuestions.length}
                 </span>
               </div>
-              <div className="text-base font-medium text-slate-800 leading-relaxed">
+              <div className="text-lg font-semibold text-slate-800 leading-relaxed">
                 {question.text}
               </div>
             </div>
