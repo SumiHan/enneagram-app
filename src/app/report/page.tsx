@@ -52,15 +52,22 @@ function ReportContent() {
   useEffect(() => {
     const shouldAutoGenerate = searchParams.get('generate') === 'true';
     
+    console.log('[ReportPage] Auto-generate check:', {
+      shouldAutoGenerate,
+      triggered: autoGenerateTriggered.current,
+      loading,
+      hasReport: !!report,
+      mainCompleted: progress?.main_survey.status === "COMPLETED"
+    });
+    
     if (shouldAutoGenerate && 
         !autoGenerateTriggered.current && 
-        !loading && 
-        !report && 
         progress?.main_survey.status === "COMPLETED") {
+      console.log('[ReportPage] Starting auto-generation...');
       autoGenerateTriggered.current = true;
       onGenerate();
     }
-  }, [searchParams, loading, report, progress, onGenerate]);
+  }, [searchParams, progress, onGenerate]);
 
   const disabled = progress?.main_survey.status !== "COMPLETED";
 
