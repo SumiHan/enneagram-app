@@ -290,18 +290,25 @@ export default function AdminResponsesPage() {
   };
 
   const getAnswerText = (answer: SurveyAnswer, questions: QuestionItem[]) => {
+    console.log('getAnswerText called:', { answer, questionsCount: questions.length });
+    
     const question = questions.find(q => q.id === answer.q_id);
+    console.log('Found question:', { question, questionId: answer.q_id });
+    
     if (!question) {
+      console.log('Question not found for answer:', answer);
       return `${answer.q_id}: ${answer.value} (질문 텍스트 없음)`;
     }
     
     if (question.options && question.options.length > 0) {
       const idx = parseInt(String(answer.value)) - 1;
       const optionText = question.options[idx];
+      console.log('Using options:', { idx, optionText, options: question.options });
       return optionText || `선택 ${answer.value}`;
     } else {
       const likertLabels = ["전혀 그렇지 않다", "그렇지 않다", "약간 그렇지 않다", "약간 그렇다", "그렇다", "매우 그렇다"];
       const likertText = likertLabels[parseInt(String(answer.value)) - 1] || String(answer.value);
+      console.log('Using Likert scale:', { value: answer.value, likertText });
       return likertText;
     }
   };
@@ -531,6 +538,12 @@ export default function AdminResponsesPage() {
             <div className="flex-1 overflow-y-auto p-6">
               {activeTab === 'pre' && (
                 <div className="space-y-2">
+                  <div className="mb-4 p-3 bg-slate-50 rounded text-sm">
+                    <p><strong>디버그 정보:</strong></p>
+                    <p>사전 설문 문항 수: {preQuestions.length}</p>
+                    <p>사용자 응답 수: {selectedRecord.preAnswers.length}</p>
+                    <p>사용자 응답: {JSON.stringify(selectedRecord.preAnswers.slice(0, 2))}</p>
+                  </div>
                   <table className="w-full text-sm border-collapse">
                     <thead>
                       <tr className="bg-slate-50">
@@ -541,9 +554,10 @@ export default function AdminResponsesPage() {
                     <tbody>
                       {preQuestions.map((q) => {
                         const answer = selectedRecord.preAnswers.find(a => a.q_id === q.id);
+                        console.log(`Pre question ${q.id}:`, { question: q.text, answer: answer });
                         return (
                           <tr key={q.id}>
-                            <td className="border border-slate-300 px-4 py-2">{q.text}</td>
+                            <td className="border border-slate-300 px-4 py-2">{q.text || '문항 텍스트 없음'}</td>
                             <td className="border border-slate-300 px-4 py-2">
                               {answer ? getAnswerText(answer, preQuestions) : '-'}
                             </td>
@@ -557,6 +571,12 @@ export default function AdminResponsesPage() {
 
               {activeTab === 'main' && (
                 <div className="space-y-2">
+                  <div className="mb-4 p-3 bg-slate-50 rounded text-sm">
+                    <p><strong>디버그 정보:</strong></p>
+                    <p>본 설문 문항 수: {mainQuestions.length}</p>
+                    <p>사용자 응답 수: {selectedRecord.mainAnswers.length}</p>
+                    <p>사용자 응답: {JSON.stringify(selectedRecord.mainAnswers.slice(0, 2))}</p>
+                  </div>
                   <table className="w-full text-sm border-collapse">
                     <thead>
                       <tr className="bg-slate-50">
@@ -567,9 +587,10 @@ export default function AdminResponsesPage() {
                     <tbody>
                       {mainQuestions.map((q) => {
                         const answer = selectedRecord.mainAnswers.find(a => a.q_id === q.id);
+                        console.log(`Main question ${q.id}:`, { question: q.text, answer: answer });
                         return (
                           <tr key={q.id}>
-                            <td className="border border-slate-300 px-4 py-2">{q.text}</td>
+                            <td className="border border-slate-300 px-4 py-2">{q.text || '문항 텍스트 없음'}</td>
                             <td className="border border-slate-300 px-4 py-2">
                               {answer ? getAnswerText(answer, mainQuestions) : '-'}
                             </td>
