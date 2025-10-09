@@ -28,7 +28,10 @@ export function useSurveyStatus(userId: string | null, surveyType: SurveyType): 
    * Fetch status from Supabase (single source of truth)
    */
   const fetchStatus = useCallback(async () => {
+    console.log(`[useSurveyStatus] fetchStatus called for ${surveyType}, userId:`, userId);
+    
     if (!userId) {
+      console.log('[useSurveyStatus] No userId, setting not_started');
       setStatus('not_started');
       setLoading(false);
       return;
@@ -38,13 +41,25 @@ export function useSurveyStatus(userId: string | null, surveyType: SurveyType): 
       setLoading(true);
       setError(null);
 
+      // Verify current Supabase user
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      console.log(`[useSurveyStatus] Current Supabase user:`, currentUser?.id);
+      console.log(`[useSurveyStatus] Provided userId:`, userId);
+      
+      if (currentUser?.id !== userId) {
+        console.warn('[useSurveyStatus] ⚠️ userId mismatch! currentUser:', currentUser?.id, 'vs provided:', userId);
+      }
+
       // Check responses table first (most up-to-date)
+      console.log(`[useSurveyStatus] Querying responses table for userId=${userId}, surveyType=${surveyType}`);
       const { data: responseData, error: responseError } = await supabase
         .from('responses')
-        .select('status')
+        .select('status, user_id, survey_type, updated_at')
         .eq('user_id', userId)
         .eq('survey_type', surveyType)
         .maybeSingle();
+
+      console.log(`[useSurveyStatus] Responses query result:`, { responseData, responseError });
 
       if (responseError) throw responseError;
 
@@ -52,8 +67,9 @@ export function useSurveyStatus(userId: string | null, surveyType: SurveyType): 
         // Map 'in_progress' | 'completed' to our status type
         const mappedStatus = responseData.status as 'in_progress' | 'completed';
         setStatus(mappedStatus);
-        console.log(`[useSurveyStatus] Loaded ${surveyType} status from responses:`, mappedStatus);
+        console.log(`[useSurveyStatus] ✅ Loaded ${surveyType} status from responses:`, mappedStatus, 'updated_at:', responseData.updated_at);
       } else {
+        console.log(`[useSurveyStatus] No response data found, checking user_progress table`);
         // No response data, check user_progress table
         const { data: progressData, error: progressError } = await supabase
           .from('user_progress')
@@ -63,10 +79,14 @@ export function useSurveyStatus(userId: string | null, surveyType: SurveyType): 
 
         if (progressError) throw progressError;
 
+        console.log(`[useSurveyStatus] User_progress query result:`, { progressData, progressError });
+        
         if (progressData) {
           const dbStatus = surveyType === 'pre' 
             ? (progressData as any).pre_survey_status 
             : (progressData as any).main_survey_status;
+          
+          console.log(`[useSurveyStatus] DB status from user_progress:`, dbStatus);
           
           // Map DB status to our type
           const mappedStatus: SurveyStatus = 
@@ -75,45 +95,59 @@ export function useSurveyStatus(userId: string | null, surveyType: SurveyType): 
             'not_started';
           
           setStatus(mappedStatus);
-          console.log(`[useSurveyStatus] Loaded ${surveyType} status from user_progress:`, mappedStatus);
+          console.log(`[useSurveyStatus] ✅ Loaded ${surveyType} status from user_progress:`, mappedStatus);
         } else {
           // No data at all, default to not_started
           setStatus('not_started');
-          console.log(`[useSurveyStatus] No data found, defaulting to not_started`);
+          console.log(`[useSurveyStatus] ⚠️ No data found in either table, defaulting to not_started`);
         }
       }
     } catch (err) {
-      console.error(`[useSurveyStatus] Error fetching ${surveyType} status:`, err);
+      console.error(`[useSurveyStatus] ❌ Error fetching ${surveyType} status:`, err);
       setError(err instanceof Error ? err.message : 'Unknown error');
       setStatus('not_started'); // Fallback
     } finally {
       setLoading(false);
+      console.log(`[useSurveyStatus] Final status for ${surveyType}:`, status);
     }
-  }, [userId, surveyType]);
+  }, [userId, surveyType, status]);
 
   /**
    * Update status in Supabase, then sync to local state
    * No optimistic updates - wait for DB confirmation
    */
   const updateStatus = useCallback(async (newStatus: SurveyStatus) => {
+    console.log(`[useSurveyStatus] updateStatus called:`, { surveyType, newStatus, userId });
+    
     if (!userId) {
-      console.warn('[useSurveyStatus] Cannot update status: no userId');
+      console.warn('[useSurveyStatus] ⚠️ Cannot update status: no userId');
       return;
     }
 
     try {
-      console.log(`[useSurveyStatus] Updating ${surveyType} status to:`, newStatus);
+      console.log(`[useSurveyStatus] 📝 Updating ${surveyType} status to:`, newStatus);
+
+      // Verify current user
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      console.log(`[useSurveyStatus] Current user during update:`, currentUser?.id);
 
       // Update responses table
-      const { error: responseError } = await supabase
+      const upsertData = {
+        user_id: userId,
+        survey_type: surveyType,
+        status: newStatus === 'completed' ? 'completed' : 'in_progress',
+      };
+      
+      console.log(`[useSurveyStatus] Upserting to responses:`, upsertData);
+      
+      const { data: upsertedData, error: responseError } = await supabase
         .from('responses')
-        .upsert({
-          user_id: userId,
-          survey_type: surveyType,
-          status: newStatus === 'completed' ? 'completed' : 'in_progress',
-        }, {
+        .upsert(upsertData, {
           onConflict: 'user_id,survey_type'
-        });
+        })
+        .select();
+
+      console.log(`[useSurveyStatus] Upsert result:`, { upsertedData, responseError });
 
       if (responseError) throw responseError;
 
@@ -124,18 +158,23 @@ export function useSurveyStatus(userId: string | null, surveyType: SurveyType): 
 
       const updateField = surveyType === 'pre' ? 'pre_survey_status' : 'main_survey_status';
       
-      const { error: progressError } = await supabase
+      console.log(`[useSurveyStatus] Updating user_progress: ${updateField} = ${dbStatus}`);
+      
+      const { data: updatedProgress, error: progressError } = await supabase
         .from('user_progress')
         .update({ [updateField]: dbStatus })
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .select();
+
+      console.log(`[useSurveyStatus] User_progress update result:`, { updatedProgress, progressError });
 
       if (progressError) throw progressError;
 
       // Only after successful DB update, update local state
       setStatus(newStatus);
-      console.log(`[useSurveyStatus] Successfully updated ${surveyType} status to:`, newStatus);
+      console.log(`[useSurveyStatus] ✅ Successfully updated ${surveyType} status to:`, newStatus);
     } catch (err) {
-      console.error(`[useSurveyStatus] Error updating ${surveyType} status:`, err);
+      console.error(`[useSurveyStatus] ❌ Error updating ${surveyType} status:`, err);
       setError(err instanceof Error ? err.message : 'Unknown error');
       throw err; // Re-throw so caller can handle
     }
