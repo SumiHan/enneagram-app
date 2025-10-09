@@ -50,14 +50,17 @@ export function Likert({ value, onChange, labels = defaultLabels }: Props) {
                 width: '40px',
                 height: '40px',
                 borderRadius: '50%',
-                backgroundColor: color.bg,
-                border: `2px solid ${color.border}`,
-                opacity: isSelected ? 1 : 0.6,
-                transform: isSelected ? 'scale(1.05)' : 'scale(1)',
-                boxShadow: isSelected ? `0 4px 12px ${color.border}40` : 'none',
+                backgroundColor: isSelected ? '#3B82F6' : color.bg, // 선택 시 파란색
+                border: isSelected ? '2px solid #2563EB' : `2px solid ${color.border}`,
+                opacity: isSelected ? 1 : 0.3, // 미선택 시 30% 투명도
+                transform: isSelected ? 'scale(1.1)' : 'scale(1)',
+                boxShadow: isSelected ? '0 4px 12px rgba(59, 130, 246, 0.4)' : 'none',
               }}
             >
-              <span className="text-xs font-bold" style={{ color: color.text }}>
+              <span 
+                className="text-xs font-bold" 
+                style={{ color: isSelected ? '#FFFFFF' : color.text }}
+              >
                 {n}
               </span>
             </button>
@@ -67,7 +70,7 @@ export function Likert({ value, onChange, labels = defaultLabels }: Props) {
       
       {/* 모바일용 레이블 (선택된 항목만 표시) */}
       {value && (
-        <div className="sm:hidden text-center text-sm font-medium" style={{ color: colors[value - 1].border }}>
+        <div className="sm:hidden text-center text-sm font-medium text-blue-600">
           {finalLabels[value - 1]}
         </div>
       )}
