@@ -347,16 +347,64 @@ export async function apiGetReportStatus(userId: string): Promise<'not_started' 
 
 export async function apiGenerateReport(userId: string) {
   try {
-    // Get user progress for seed
-    const progress = await apiGetProgress(userId);
-    const typeIndex = (progress.main_survey.seed ?? 7) % 9;
-    const types = ["1 개혁가", "2 조력가", "3 성취가", "4 개인주의자", "5 탐구자", "6 충성가", "7 낙천가", "8 도전자", "9 평화주의자"];
+    console.log(`Starting report generation for user ${userId}`);
     
+    // 1. Get user's pre-survey and main-survey responses
+    const { data: preResponse, error: preError } = await supabase
+      .from('responses')
+      .select('answers')
+      .eq('user_id', userId)
+      .eq('survey_type', 'pre')
+      .maybeSingle();
+    
+    if (preError) {
+      console.error('Error fetching pre-survey:', preError);
+      throw new Error('사전 설문 데이터를 불러올 수 없습니다.');
+    }
+
+    const { data: mainResponse, error: mainError } = await supabase
+      .from('responses')
+      .select('answers')
+      .eq('user_id', userId)
+      .eq('survey_type', 'main')
+      .maybeSingle();
+    
+    if (mainError) {
+      console.error('Error fetching main-survey:', mainError);
+      throw new Error('본 설문 데이터를 불러올 수 없습니다.');
+    }
+
+    if (!preResponse || !mainResponse) {
+      throw new Error('설문 응답이 완료되지 않았습니다.');
+    }
+
+    // Convert answers object to array format
+    const preAnswers = Object.entries(preResponse.answers || {}).map(([q_id, value]) => ({
+      q_id,
+      value: Number(value),
+      ts: Date.now()
+    }));
+
+    const mainAnswers = Object.entries(mainResponse.answers || {}).map(([q_id, value]) => ({
+      q_id,
+      value: Number(value),
+      ts: Date.now()
+    }));
+
+    console.log(`Pre-survey answers: ${preAnswers.length}, Main-survey answers: ${mainAnswers.length}`);
+
+    // 2. Generate report using OpenAI
+    const { generateReportWithOpenAI } = await import('./openai');
+    const aiResult = await generateReportWithOpenAI(userId, preAnswers, mainAnswers);
+
+    console.log('AI Result:', aiResult);
+
+    // 3. Save report to database
     const reportData = {
       user_id: userId,
-      enneagram_type: types[typeIndex],
-      characteristics: "이 유형은 정확성과 책임감을 중시하며, 항상 성장을 추구합니다. 완벽주의 성향이 강하고, 높은 기준을 유지하려고 노력합니다.",
-      job_recommendations: ["프로덕트 매니저", "데이터 분석가", "UX 리서처"],
+      enneagram_type: aiResult.enneagram_type,
+      characteristics: aiResult.characteristics,
+      job_recommendations: aiResult.job_recommendations,
     };
 
     // Upsert report (only one report per user)
@@ -368,9 +416,14 @@ export async function apiGenerateReport(userId: string) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error saving report:', error);
+      throw error;
+    }
 
-    // Update progress
+    console.log('Report saved to database:', data.id);
+
+    // 4. Update progress
     const { error: progressError } = await supabase
       .from('user_progress')
       .update({
@@ -379,9 +432,12 @@ export async function apiGenerateReport(userId: string) {
       })
       .eq('user_id', userId);
 
-    if (progressError) throw progressError;
+    if (progressError) {
+      console.error('Error updating progress:', progressError);
+      throw progressError;
+    }
 
-    // Emit event to notify UI components
+    // 5. Emit event to notify UI components
     eventBus.emit(EVENTS.REPORT_GENERATED, {
       userId,
       reportId: data.id,
