@@ -163,6 +163,8 @@ export default function MainSurveyPage() {
     
     if (currentPage < 2 && Object.keys(answers).length >= questions.length) {
       console.log('Moving to page:', currentPage + 1);
+      // Scroll to top immediately before state change
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       setCurrentPage(currentPage + 1);
       // Don't clear answers here - let useEffect handle loading
     } else {
@@ -172,6 +174,8 @@ export default function MainSurveyPage() {
 
   const onPrevPage = () => {
     if (currentPage > 0) {
+      // Scroll to top immediately before state change
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       setCurrentPage(currentPage - 1);
       // Don't clear answers here - let useEffect handle loading
     }
