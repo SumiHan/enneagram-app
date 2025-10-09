@@ -47,6 +47,11 @@ export interface QuestionItem {
   id: string;
   text: string;
   options?: string[]; // for pre survey variable options
+  // 추가 필드들 (CSV에서 사용)
+  category?: string;
+  purpose?: string;
+  type?: string;
+  typeName?: string;
 }
 
 

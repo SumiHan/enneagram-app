@@ -20,7 +20,7 @@ export default function AdminDashboard() {
           <div className="font-semibold">설문 문항 수정</div>
           <p className="text-sm text-slate-600">사전/본 설문 문항을 CSV로 관리합니다.</p>
           <div className="mt-auto">
-            <button className="btn btn-primary" onClick={() => router.push("/admin/questions")}>이동</button>
+            <button className="btn btn-primary" onClick={() => router.push("/admin/questions-simple")}>이동</button>
           </div>
         </div>
         <div className="card p-5 flex flex-col gap-3">

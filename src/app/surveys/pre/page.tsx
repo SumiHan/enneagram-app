@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PRE_QUESTIONS } from "@/data/questions";
-import { getPreQuestionsFromStorage } from "@/lib/dynamic-questions";
+import { getPreSurveyQuestions } from "@/lib/survey-questions";
 import { RadioOptions } from "@/components/RadioOptions";
 import { apiCompletePre, apiPatchPreAnswers } from "@/lib/api";
 import { useProgress } from "@/lib/progress-context";
@@ -13,11 +13,26 @@ export default function PreSurveyPage() {
   const [answers, setAnswers] = useState<Record<string, string | null>>({});
   const saveTimer = useRef<number | null>(null);
 
-  const preList = getPreQuestionsFromStorage(PRE_QUESTIONS);
+  const [preList, setPreList] = useState(PRE_QUESTIONS);
 
   useEffect(() => {
-    // Load existing answers from localStorage
-    if (typeof window === 'undefined') return;
+    // Load questions from Supabase
+    const loadQuestions = async () => {
+      try {
+        const questions = await getPreSurveyQuestions();
+        setPreList(questions.length > 0 ? questions : PRE_QUESTIONS);
+      } catch (error) {
+        console.error('Failed to load pre-survey questions:', error);
+        setPreList(PRE_QUESTIONS); // Fallback to default
+      }
+    };
+    
+    loadQuestions();
+  }, []);
+
+  useEffect(() => {
+    // Load existing answers from localStorage (after questions are loaded)
+    if (typeof window === 'undefined' || preList.length === 0) return;
     
     const surveyKey = `survey.pre.v1:${userId}`;
     const existingSurvey = localStorage.getItem(surveyKey);

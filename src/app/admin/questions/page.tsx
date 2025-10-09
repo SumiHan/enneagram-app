@@ -2,7 +2,8 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { parseQuestionsCsv, saveMainQuestions, savePreQuestions } from "@/lib/dynamic-questions";
+import { parseQuestionsCsv, saveMainSurveyQuestions, savePreSurveyQuestions } from "@/lib/survey-questions";
+import { savePreQuestions, saveMainQuestions } from "@/lib/dynamic-questions";
 import { getLocalStorage, setLocalStorage } from "@/lib/storage";
 
 type QuestionVersion = {

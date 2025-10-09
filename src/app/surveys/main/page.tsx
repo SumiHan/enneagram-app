@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Likert } from "@/components/Likert";
 import { MAIN_QUESTIONS_POOL } from "@/data/questions";
-import { getMainQuestionsFromStorage } from "@/lib/dynamic-questions";
+import { getMainSurveyQuestions } from "@/lib/survey-questions";
 import { mulberry32, shuffleDeterministic } from "@/lib/rng";
 import { apiCompleteMain, apiPatchMainAnswers, apiStartMainSession } from "@/lib/api";
 import { useProgress } from "@/lib/progress-context";
@@ -35,21 +35,37 @@ export default function MainSurveyPage() {
     }
   }, [progress, reload, router, userId]);
 
-  const allQuestions = useMemo(() => {
-    if (seed == null) return [] as typeof MAIN_QUESTIONS_POOL;
-    const pool = getMainQuestionsFromStorage(MAIN_QUESTIONS_POOL);
-    const shuffled = shuffleDeterministic(pool, seed);
+  const [allQuestions, setAllQuestions] = useState(MAIN_QUESTIONS_POOL);
+
+  useEffect(() => {
+    // Load questions from Supabase
+    const loadQuestions = async () => {
+      try {
+        const questions = await getMainSurveyQuestions();
+        setAllQuestions(questions.length > 0 ? questions : MAIN_QUESTIONS_POOL);
+      } catch (error) {
+        console.error('Failed to load main-survey questions:', error);
+        setAllQuestions(MAIN_QUESTIONS_POOL); // Fallback to default
+      }
+    };
+    
+    loadQuestions();
+  }, []);
+
+  const shuffledQuestions = useMemo(() => {
+    if (seed == null || allQuestions.length === 0) return [] as typeof MAIN_QUESTIONS_POOL;
+    const shuffled = shuffleDeterministic(allQuestions, seed);
     return shuffled.slice(0, 90); // 90 questions total
-  }, [seed]);
+  }, [allQuestions, seed]);
 
   const questions = useMemo(() => {
     const startIndex = currentPage * 30;
-    return allQuestions.slice(startIndex, startIndex + 30);
-  }, [allQuestions, currentPage]);
+    return shuffledQuestions.slice(startIndex, startIndex + 30);
+  }, [shuffledQuestions, currentPage]);
 
   const currentPageQuestionCount = questions.length;
   const pct = Math.round(((Object.keys(answers).length) / currentPageQuestionCount) * 100);
-  const totalProgress = Math.round(((currentPage * 30 + Object.keys(answers).length) / 90) * 100);
+  const totalProgress = Math.round(((currentPage * 30 + Object.keys(answers).length) / shuffledQuestions.length) * 100);
   
   // Debug logging
   console.log('=== DEBUG INFO ===');
