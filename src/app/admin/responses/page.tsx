@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getPreQuestionsFromStorage, getMainQuestionsFromStorage } from "@/lib/dynamic-questions";
 import type { SurveyAnswer, QuestionItem } from "@/lib/types";
+import { SurveyStatusCell } from "@/components/SurveyStatusCell";
 import * as XLSX from 'xlsx';
 
 type UserRecord = {
@@ -285,23 +286,30 @@ export default function AdminResponsesPage() {
                 </td>
                 <td className="py-2 pr-4">{r.email}</td>
                 <td className="py-2 pr-4">
-                  <div className="text-xs">
-                    <div className="font-medium">{r.preStatus}</div>
-                    <div className="text-slate-500">{r.preAnsweredCount} / {r.preTotalCount}</div>
-                  </div>
+                  <SurveyStatusCell 
+                    status={r.preStatus as "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED"}
+                    answered={r.preAnsweredCount}
+                    total={r.preTotalCount}
+                  />
                 </td>
                 <td className="py-2 pr-4">
-                  <div className="text-xs">
-                    <div className="font-medium">{r.mainStatus}</div>
-                    <div className="text-slate-500">{r.mainAnsweredCount} / {r.mainTotalCount} 문항</div>
-                  </div>
+                  <SurveyStatusCell 
+                    status={r.mainStatus as "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED"}
+                    answered={r.mainAnsweredCount}
+                    total={r.mainTotalCount}
+                  />
                 </td>
                 <td className="py-2 pr-4">
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    r.reportStatus === 'COMPLETED' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
-                  }`}>
-                    {r.reportStatus}
-                  </span>
+                  <div className="flex flex-col gap-1">
+                    <div className={`inline-flex items-center rounded-full px-3 h-7 text-sm font-semibold ${
+                      r.reportStatus === 'COMPLETED' ? 'text-green-600 bg-green-50' : 'text-gray-500 bg-gray-100'
+                    }`}>
+                      {r.reportStatus === 'COMPLETED' ? 'Completed' : 'Not Started'}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {r.reportStatus === 'COMPLETED' ? '리포트 생성 완료' : '대기 중'}
+                    </div>
+                  </div>
                 </td>
                 <td className="py-2 text-right">
                   <button className="btn btn-outline text-sm" onClick={() => setSelectedUser(r.userId)}>
