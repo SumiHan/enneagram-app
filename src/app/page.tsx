@@ -81,18 +81,14 @@ export default function HomePage() {
     }
   };
 
+  // Load data when userId is available and component is hydrated
   useEffect(() => {
-    if (userId) {
-      loadData();
-    }
-  }, [userId]);
-  
-  // Also load on mount to ensure fresh data
-  useEffect(() => {
+    console.log('[HomePage] useEffect triggered - userId:', userId, 'hydrated:', hydrated);
     if (userId && hydrated) {
+      console.log('[HomePage] Calling loadData()');
       loadData();
     }
-  }, [hydrated]);
+  }, [userId, hydrated]);
 
   // Listen for report generation events
   useEffect(() => {

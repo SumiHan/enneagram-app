@@ -15,16 +15,25 @@ const ProgressCtx = createContext<Ctx | null>(null);
 export function ProgressProvider({ children }: { children: React.ReactNode }) {
   const [progress, setProgress] = useState<UserProgress | null>(null);
   const { user } = useAuth();
-  const userIdRef = useRef<string>("demo-user");
+  const userIdRef = useRef<string>("");
 
   const reload = async () => {
+    if (!userIdRef.current) {
+      console.log('[ProgressProvider] No userId, skipping reload');
+      return;
+    }
     const p = await apiGetProgress(userIdRef.current);
     setProgress(p);
   };
 
   useEffect(() => {
-    userIdRef.current = user?.uid ?? "demo-user";
-    reload();
+    const newUserId = user?.uid ?? "";
+    console.log('[ProgressProvider] User changed, new userId:', newUserId);
+    userIdRef.current = newUserId;
+    
+    if (newUserId) {
+      reload();
+    }
   }, [user]);
 
   const value = useMemo<Ctx>(() => ({ userId: userIdRef.current, progress, reload }), [progress]);
