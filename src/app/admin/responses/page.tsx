@@ -117,13 +117,6 @@ export default function AdminResponsesPage() {
     try {
       setLoading(true);
       
-      // Debug: Check all reports in database
-      const { data: allReports, error: allReportsError } = await supabase
-        .from('reports')
-        .select('*');
-      
-      console.log('All reports in database:', { allReports, allReportsError });
-      
       // Load questions from Supabase
       const { data: preQData } = await supabase
         .from('pre_survey_questions')
@@ -149,16 +142,8 @@ export default function AdminResponsesPage() {
         text: q.text_ko // Use text_ko as the text field
       }));
       
-      console.log('Mapped pre questions:', mappedPreQuestions.slice(0, 2));
-      console.log('Mapped main questions:', mappedMainQuestions.slice(0, 2));
-      
       setPreQuestions(mappedPreQuestions);
       setMainQuestions(mappedMainQuestions);
-      
-      console.log('Loaded questions from Supabase:', {
-        pre: preQData?.length || 0,
-        main: mainQData?.length || 0
-      });
       
       // Load only users with role='user' (exclude admins)
       const { data: usersData, error: usersError } = await supabase
@@ -310,13 +295,9 @@ export default function AdminResponsesPage() {
   };
 
   const getAnswerText = (answer: SurveyAnswer, questions: QuestionItem[]) => {
-    console.log('getAnswerText called:', { answer, questionsCount: questions.length });
-    
     const question = questions.find(q => q.id === answer.q_id);
-    console.log('Found question:', { question, questionId: answer.q_id });
     
     if (!question) {
-      console.log('Question not found for answer:', answer);
       return `${answer.q_id}: ${answer.value} (질문 텍스트 없음)`;
     }
     
@@ -332,12 +313,9 @@ export default function AdminResponsesPage() {
         optionsArray = (question.options as string).split('/').map((opt: string) => opt.trim());
       }
       
-      console.log('Parsed options:', { original: question.options, parsed: optionsArray });
-      
       if (optionsArray.length > 0) {
         const idx = parseInt(String(answer.value)) - 1;
         const optionText = optionsArray[idx];
-        console.log('Using options:', { idx, optionText, optionsArray });
         return optionText || `선택 ${answer.value}`;
       }
     }
@@ -345,7 +323,6 @@ export default function AdminResponsesPage() {
     // For main survey (Likert scale 1-6)
     const likertLabels = ["전혀 그렇지 않다", "그렇지 않다", "약간 그렇지 않다", "약간 그렇다", "그렇다", "매우 그렇다"];
     const likertText = likertLabels[parseInt(String(answer.value)) - 1] || String(answer.value);
-    console.log('Using Likert scale:', { value: answer.value, likertText });
     return likertText;
   };
 
@@ -574,25 +551,17 @@ export default function AdminResponsesPage() {
             <div className="flex-1 overflow-y-auto p-6">
               {activeTab === 'pre' && (
                 <div className="space-y-2">
-                  <div className="mb-4 p-3 bg-slate-50 rounded text-sm">
-                    <p><strong>디버그 정보:</strong></p>
-                    <p>사전 설문 문항 수: {preQuestions.length}</p>
-                    <p>사용자 응답 수: {selectedRecord.preAnswers.length}</p>
-                    <p>사용자 응답: {JSON.stringify(selectedRecord.preAnswers.slice(0, 2))}</p>
-                    <p>매핑된 질문 샘플: {JSON.stringify(preQuestions.slice(0, 1).map(q => ({id: q.id, text: q.text?.substring(0, 50)})))}</p>
-                  </div>
                   <table className="w-full text-sm border-collapse">
                     <thead>
                       <tr className="bg-slate-50">
-                        <th className="border border-slate-300 px-4 py-2 text-center font-semibold w-20">문항 번호</th>
-                        <th className="border border-slate-300 px-4 py-2 text-left font-semibold">문항 내용</th>
-                        <th className="border border-slate-300 px-4 py-2 text-left font-semibold w-1/3">사용자 응답</th>
+                        <th className="border border-slate-300 px-4 py-2 text-center font-semibold" style={{ width: '100px' }}>문항 번호</th>
+                        <th className="border border-slate-300 px-4 py-2 text-left font-semibold" style={{ minWidth: '300px' }}>문항 내용</th>
+                        <th className="border border-slate-300 px-4 py-2 text-left font-semibold" style={{ width: '200px' }}>사용자 응답</th>
                       </tr>
                     </thead>
                     <tbody>
                       {preQuestions.map((q) => {
                         const answer = selectedRecord.preAnswers.find(a => a.q_id === q.id);
-                        console.log(`Pre question ${q.id}:`, { question: q.text, answer: answer });
                         return (
                           <tr key={q.id}>
                             <td className="border border-slate-300 px-4 py-2 text-center font-medium">{q.id}</td>
@@ -610,25 +579,17 @@ export default function AdminResponsesPage() {
 
               {activeTab === 'main' && (
                 <div className="space-y-2">
-                  <div className="mb-4 p-3 bg-slate-50 rounded text-sm">
-                    <p><strong>디버그 정보:</strong></p>
-                    <p>본 설문 문항 수: {mainQuestions.length}</p>
-                    <p>사용자 응답 수: {selectedRecord.mainAnswers.length}</p>
-                    <p>사용자 응답: {JSON.stringify(selectedRecord.mainAnswers.slice(0, 2))}</p>
-                    <p>매핑된 질문 샘플: {JSON.stringify(mainQuestions.slice(0, 1).map(q => ({id: q.id, text: q.text?.substring(0, 50)})))}</p>
-                  </div>
                   <table className="w-full text-sm border-collapse">
                     <thead>
                       <tr className="bg-slate-50">
-                        <th className="border border-slate-300 px-4 py-2 text-center font-semibold w-20">문항 번호</th>
-                        <th className="border border-slate-300 px-4 py-2 text-left font-semibold">문항 내용</th>
-                        <th className="border border-slate-300 px-4 py-2 text-left font-semibold w-1/3">사용자 응답</th>
+                        <th className="border border-slate-300 px-4 py-2 text-center font-semibold" style={{ width: '100px' }}>문항 번호</th>
+                        <th className="border border-slate-300 px-4 py-2 text-left font-semibold" style={{ minWidth: '300px' }}>문항 내용</th>
+                        <th className="border border-slate-300 px-4 py-2 text-left font-semibold" style={{ width: '200px' }}>사용자 응답</th>
                       </tr>
                     </thead>
                     <tbody>
                       {mainQuestions.map((q) => {
                         const answer = selectedRecord.mainAnswers.find(a => a.q_id === q.id);
-                        console.log(`Main question ${q.id}:`, { question: q.text, answer: answer });
                         return (
                           <tr key={q.id}>
                             <td className="border border-slate-300 px-4 py-2 text-center font-medium">{q.id}</td>
