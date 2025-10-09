@@ -117,6 +117,13 @@ export default function AdminResponsesPage() {
     try {
       setLoading(true);
       
+      // Debug: Check all reports in database
+      const { data: allReports, error: allReportsError } = await supabase
+        .from('reports')
+        .select('*');
+      
+      console.log('All reports in database:', { allReports, allReportsError });
+      
       // Load questions from Supabase
       const { data: preQData } = await supabase
         .from('pre_survey_questions')
@@ -142,6 +149,10 @@ export default function AdminResponsesPage() {
       if (usersError) throw usersError;
       
       console.log('Loaded user-role users for responses:', usersData?.length);
+      
+      // Debug: Check current authenticated user
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      console.log('Current authenticated user:', currentUser?.id, currentUser?.email);
       
       const userRecords: UserRecord[] = [];
       
@@ -190,13 +201,23 @@ export default function AdminResponsesPage() {
         });
         
         // Load report (maybeSingle to avoid error when no data)
-        const { data: reportData } = await supabase
+        const { data: reportData, error: reportError } = await supabase
           .from('reports')
           .select('*')
           .eq('user_id', userData.id)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle(); // Use maybeSingle instead of single to handle no data gracefully
+        
+        if (reportError) {
+          console.error(`Error loading report for user ${userData.email}:`, reportError);
+        }
+        
+        console.log(`Report data for user ${userData.email}:`, { reportData, reportError });
+        
+        // Determine report status - more strict check
+        const reportStatus = (reportData && reportData.id && reportData.enneagram_type) ? 'COMPLETED' : 'NOT_STARTED';
+        console.log(`Report status for ${userData.email}: ${reportStatus} (reportData exists: ${!!reportData}, has id: ${!!reportData?.id}, has type: ${!!reportData?.enneagram_type})`);
         
         userRecords.push({
           userId: userData.id,
@@ -208,7 +229,7 @@ export default function AdminResponsesPage() {
           mainStatus: mainStatus,
           mainAnsweredCount: mainAnsweredCount,
           mainTotalCount: mainTotalCount,
-          reportStatus: reportData ? 'COMPLETED' : 'NOT_STARTED',
+          reportStatus: reportStatus,
           preAnswers: preResponseData?.answers ? Object.entries(preResponseData.answers).map(([qId, value]) => ({
             q_id: qId,
             value: Number(value),
