@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useProgress } from "@/lib/progress-context";
 import { ProgressCard } from "@/components/ProgressCard";
-import { apiGetProgress } from "@/lib/api";
+import { apiGetProgress, apiGetReportStatus } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useSurveyStatus } from "@/hooks/useSurveyStatus";
 import { DebugPanel } from "@/components/DebugPanel";
@@ -13,6 +13,8 @@ export default function HomePage() {
   const { user, loading: authLoading } = useAuth();
   const { userId, progress, reload } = useProgress();
   const [hydrated, setHydrated] = useState(false);
+  const [reportStatus, setReportStatus] = useState<'not_started' | 'completed'>('not_started');
+  const [loadingReport, setLoadingReport] = useState(true);
   
   // Use DB-based survey status hooks (single source of truth)
   const preStatus = useSurveyStatus(userId, 'pre');
@@ -46,11 +48,35 @@ export default function HomePage() {
     setHydrated(true);
   }, [progress, reload, user, authLoading, router]);
 
+  // Load report status from DB
+  useEffect(() => {
+    if (!userId) {
+      setLoadingReport(false);
+      return;
+    }
+
+    const loadReportStatus = async () => {
+      setLoadingReport(true);
+      try {
+        const status = await apiGetReportStatus(userId);
+        console.log('[HomePage] Report status from DB:', status);
+        setReportStatus(status);
+      } catch (error) {
+        console.error('[HomePage] Error loading report status:', error);
+        setReportStatus('not_started');
+      } finally {
+        setLoadingReport(false);
+      }
+    };
+
+    loadReportStatus();
+  }, [userId]);
+
   const prePct = progress ? Math.round((progress.pre_survey.answered_count / progress.pre_survey.total_count) * 100) : 0;
   const mainPct = progress ? Math.round((progress.main_survey.sets / progress.main_survey.total_sets) * 100) : 0;
 
   // Show loading state
-  if (authLoading || preStatus.loading || mainStatus.loading) {
+  if (authLoading || preStatus.loading || mainStatus.loading || loadingReport) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="text-slate-600">
@@ -107,11 +133,11 @@ export default function HomePage() {
           <ProgressCard
             title="결과 리포트"
             description="유형, 특징, 직업 추천 3개를 확인합니다."
-            status={progress?.report.status ?? "NOT_STARTED"}
-            progressPct={progress?.report.status === "COMPLETED" ? 100 : 0}
-            actionLabel={progress?.report.status === "COMPLETED" ? "보기" : "생성하기"}
+            status={reportStatus === 'completed' ? 'COMPLETED' : 'NOT_STARTED'}
+            progressPct={reportStatus === 'completed' ? 100 : 0}
+            actionLabel={reportStatus === 'completed' ? "보기" : "생성하기"}
             onAction={() => router.push("/report")}
-            disabled={progress?.main_survey.status !== "COMPLETED"}
+            disabled={mainStatus.status !== 'completed'}
           />
         </div>
       </div>

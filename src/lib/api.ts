@@ -308,6 +308,23 @@ export async function apiCompleteMain(userId: string) {
   }
 }
 
+export async function apiGetReportStatus(userId: string): Promise<'not_started' | 'completed'> {
+  try {
+    const { data, error } = await supabase
+      .from('reports')
+      .select('id, generated_at')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    return data ? 'completed' : 'not_started';
+  } catch (error) {
+    console.error('Error getting report status:', error);
+    return 'not_started';
+  }
+}
+
 export async function apiGenerateReport(userId: string) {
   try {
     // Get user progress for seed
