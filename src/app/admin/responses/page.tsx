@@ -379,34 +379,68 @@ export default function AdminResponsesPage() {
 
     const selectedRecords = records.filter(r => selectedUsers.has(r.userId));
 
-    // Pre-survey sheet
-    const preHeaders = ['이메일', ...preQuestions.map(q => q.id)];
+    // Pre-survey sheet - with question text in headers
+    const preHeaders = ['이메일', ...preQuestions.map(q => `${q.id}_${q.text}`)];
     const preRows = selectedRecords.map(r => {
       const row: any = { '이메일': r.email };
       preQuestions.forEach(q => {
         const answer = r.preAnswers.find(a => a.q_id === q.id);
-        row[q.id] = answer ? String(answer.value) : '';
+        const columnName = `${q.id}_${q.text}`;
+        // Use getAnswerText to get the same display value as detail view
+        row[columnName] = answer ? getAnswerText(answer, preQuestions) : '';
       });
       return row;
     });
 
-    // Main survey sheet
-    const mainHeaders = ['이메일', ...mainQuestions.map(q => q.id)];
+    // Main survey sheet - with question text in headers
+    const mainHeaders = ['이메일', ...mainQuestions.map(q => `${q.id}_${q.text}`)];
     const mainRows = selectedRecords.map(r => {
       const row: any = { '이메일': r.email };
       mainQuestions.forEach(q => {
         const answer = r.mainAnswers.find(a => a.q_id === q.id);
-        row[q.id] = answer ? String(answer.value) : '';
+        const columnName = `${q.id}_${q.text}`;
+        // Use getAnswerText to get the same display value as detail view
+        row[columnName] = answer ? getAnswerText(answer, mainQuestions) : '';
       });
       return row;
+    });
+
+    // Report sheet
+    const reportHeaders = ['이메일', '리포트 결과'];
+    const reportRows = selectedRecords.map(r => {
+      let reportText = '';
+      
+      if (r.reportData && r.reportData.enneagram_type) {
+        // Format report data into readable text
+        reportText = `유형: ${r.reportData.enneagram_type}\n\n`;
+        
+        if (r.reportData.characteristics) {
+          reportText += `특성:\n${r.reportData.characteristics}\n\n`;
+        }
+        
+        if (r.reportData.job_recommendations) {
+          reportText += `직업 추천:\n${r.reportData.job_recommendations}`;
+        }
+      } else {
+        reportText = '리포트 미생성';
+      }
+      
+      return {
+        '이메일': r.email,
+        '리포트 결과': reportText
+      };
     });
 
     // Create workbook
     const wb = XLSX.utils.book_new();
     const preWs = XLSX.utils.json_to_sheet(preRows, { header: preHeaders });
     const mainWs = XLSX.utils.json_to_sheet(mainRows, { header: mainHeaders });
+    const reportWs = XLSX.utils.json_to_sheet(reportRows, { header: reportHeaders });
+    
+    // Append sheets
     XLSX.utils.book_append_sheet(wb, preWs, '사전 설문');
     XLSX.utils.book_append_sheet(wb, mainWs, '본 설문');
+    XLSX.utils.book_append_sheet(wb, reportWs, '리포트');
 
     // Download
     XLSX.writeFile(wb, `응답_${new Date().toISOString().split('T')[0]}.xlsx`);
