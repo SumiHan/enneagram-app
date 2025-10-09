@@ -42,16 +42,39 @@ export default function AdminResponsesPage() {
     }
     loadData();
   }, [user, router]);
+  
+  // Refresh data on page focus (when user comes back to tab)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (user?.role === "admin") {
+        console.log('Page focused, refreshing data...');
+        loadData();
+      }
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [user]);
 
   const loadData = async () => {
     try {
       setLoading(true);
       
-      // Load questions
-      const preQ = getPreQuestionsFromStorage([]);
-      const mainQ = getMainQuestionsFromStorage([]);
-      setPreQuestions(preQ);
-      setMainQuestions(mainQ);
+      // Load questions from Supabase
+      const { data: preQData } = await supabase
+        .from('pre_survey_questions')
+        .select('*');
+      const { data: mainQData } = await supabase
+        .from('main_survey_questions')
+        .select('*');
+      
+      setPreQuestions(preQData || []);
+      setMainQuestions(mainQData || []);
+      
+      console.log('Loaded questions from Supabase:', {
+        pre: preQData?.length || 0,
+        main: mainQData?.length || 0
+      });
       
       // Load only users with role='user' (exclude admins)
       const { data: usersData, error: usersError } = await supabase
@@ -67,32 +90,47 @@ export default function AdminResponsesPage() {
       
       for (const userData of usersData || []) {
         
-        // Load progress
-        const { data: progressData } = await supabase
-          .from('user_progress')
+        // Load responses from responses table
+        const { data: preResponseData } = await supabase
+          .from('responses')
           .select('*')
           .eq('user_id', userData.id)
-          .single();
-        
-        // Load pre-survey answers (maybeSingle to avoid error when no data)
-        const { data: preAnswersData } = await supabase
-          .from('survey_answers')
-          .select('*')
-          .eq('user_id', userData.id)
-          .eq('survey_type', 'PRE')
-          .order('created_at', { ascending: false })
-          .limit(1)
+          .eq('survey_type', 'pre')
           .maybeSingle();
         
-        // Load main survey answers (maybeSingle to avoid error when no data)
-        const { data: mainAnswersData } = await supabase
-          .from('survey_answers')
+        const { data: mainResponseData } = await supabase
+          .from('responses')
           .select('*')
           .eq('user_id', userData.id)
-          .eq('survey_type', 'MAIN')
-          .order('created_at', { ascending: false })
-          .limit(1)
+          .eq('survey_type', 'main')
           .maybeSingle();
+        
+        // Calculate status and counts based on actual response data
+        const preTotalCount = preQData?.length || 20;
+        const mainTotalCount = mainQData?.length || 90;
+        
+        // Calculate answered counts from responses data
+        const preAnsweredCount = preResponseData?.answers 
+          ? Object.keys(preResponseData.answers).length 
+          : 0;
+        const mainAnsweredCount = mainResponseData?.answers 
+          ? Object.keys(mainResponseData.answers).length 
+          : 0;
+        
+        // Determine status based on answered count
+        const getStatus = (answered: number, total: number) => {
+          if (answered === 0) return 'NOT_STARTED';
+          if (answered < total) return 'IN_PROGRESS';
+          return 'COMPLETED';
+        };
+        
+        const preStatus = getStatus(preAnsweredCount, preTotalCount);
+        const mainStatus = getStatus(mainAnsweredCount, mainTotalCount);
+        
+        console.log(`User ${userData.email}:`, {
+          pre: { answered: preAnsweredCount, total: preTotalCount, status: preStatus },
+          main: { answered: mainAnsweredCount, total: mainTotalCount, status: mainStatus }
+        });
         
         // Load report (maybeSingle to avoid error when no data)
         const { data: reportData } = await supabase
@@ -107,15 +145,23 @@ export default function AdminResponsesPage() {
           userId: userData.id,
           email: userData.email,
           name: userData.name || '-',
-          preStatus: progressData?.pre_survey_status || 'NOT_STARTED',
-          preAnsweredCount: preAnswersData?.answers?.length || 0,
-          preTotalCount: preQ.length,
-          mainStatus: progressData?.main_survey_status || 'NOT_STARTED',
-          mainAnsweredCount: mainAnswersData?.answers?.length || 0,
-          mainTotalCount: mainQ.length,
-          reportStatus: progressData?.report_status || 'NOT_STARTED',
-          preAnswers: preAnswersData?.answers || [],
-          mainAnswers: mainAnswersData?.answers || [],
+          preStatus: preStatus,
+          preAnsweredCount: preAnsweredCount,
+          preTotalCount: preTotalCount,
+          mainStatus: mainStatus,
+          mainAnsweredCount: mainAnsweredCount,
+          mainTotalCount: mainTotalCount,
+          reportStatus: reportData ? 'COMPLETED' : 'NOT_STARTED',
+          preAnswers: preResponseData?.answers ? Object.entries(preResponseData.answers).map(([qId, value]) => ({
+            q_id: qId,
+            value: Number(value),
+            ts: new Date(preResponseData.updated_at || new Date().toISOString()).getTime()
+          })) : [],
+          mainAnswers: mainResponseData?.answers ? Object.entries(mainResponseData.answers).map(([qId, value]) => ({
+            q_id: qId,
+            value: Number(value),
+            ts: new Date(mainResponseData.updated_at || new Date().toISOString()).getTime()
+          })) : [],
           reportData: reportData,
         });
       }
@@ -129,6 +175,17 @@ export default function AdminResponsesPage() {
   };
 
   const selectedRecord = records.find(r => r.userId === selectedUser);
+  
+  // Function to refresh selected user data
+  const refreshSelectedUserData = async (userId: string) => {
+    try {
+      // Reload the entire dataset to get fresh data
+      await loadData();
+      console.log(`Refreshed data for user: ${userId}`);
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+    }
+  };
 
   const getAnswerText = (answer: SurveyAnswer, questions: QuestionItem[]) => {
     const question = questions.find(q => q.id === answer.q_id);
@@ -312,7 +369,13 @@ export default function AdminResponsesPage() {
                   </div>
                 </td>
                 <td className="py-2 text-right">
-                  <button className="btn btn-outline text-sm" onClick={() => setSelectedUser(r.userId)}>
+                  <button 
+                    className="btn btn-outline text-sm" 
+                    onClick={async () => {
+                      setSelectedUser(r.userId);
+                      await refreshSelectedUserData(r.userId);
+                    }}
+                  >
                     상세보기
                   </button>
                 </td>
