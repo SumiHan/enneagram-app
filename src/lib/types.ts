@@ -29,12 +29,6 @@ export interface UserProgress {
   };
 }
 
-export interface SurveyAnswer {
-  q_id: string;
-  value: number; // 1..6 Likert
-  ts: number; // epoch ms
-}
-
 export interface SurveyResponse {
   user_id: string;
   survey_type: SurveyType;
@@ -52,6 +46,15 @@ export interface QuestionItem {
   purpose?: string;
   type?: string;
   typeName?: string;
+  required?: string;    // 'y' | 'n'
+  answerType?: string;  // '객관식-단일선택' | '객관식-다중선택' | '주관식'
+}
+
+export interface SurveyAnswer {
+  q_id: string;
+  value: number; // 1-based index (0 for 주관식)
+  ts: number; // epoch ms
+  text_value?: string; // 주관식 텍스트 답변
 }
 
 

@@ -1,3 +1,4 @@
+import Papa from 'papaparse';
 import { supabase } from './supabase';
 import type { QuestionItem } from './types';
 
@@ -11,6 +12,9 @@ export type PreSurveyQuestion = {
   text_ko: string;
   options?: string;
   purpose?: string;
+  required?: string;
+  answer_type?: string;
+  sort_order?: number;
 };
 
 export type MainSurveyQuestion = {
@@ -20,7 +24,7 @@ export type MainSurveyQuestion = {
   text_ko: string;
 };
 
-// CSV 파싱 함수
+// CSV 파싱 함수 (PapaParse 사용 - 쉼표 포함 필드 정상 처리)
 export const parseQuestionsCsv = (file: File, config: {
   idColumn: string;
   textColumn: string;
@@ -29,71 +33,42 @@ export const parseQuestionsCsv = (file: File, config: {
   purposeColumn?: string;
   typeColumn?: string;
   typeNameColumn?: string;
+  requiredColumn?: string;
+  answerTypeColumn?: string;
 }): Promise<QuestionItem[]> => {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const csv = e.target?.result as string;
-        const lines = csv.split('\n').filter(line => line.trim());
-        
-        if (lines.length < 2) {
-          throw new Error('CSV 파일에 헤더와 데이터가 필요합니다.');
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (result) => {
+        try {
+          const rows = result.data as Record<string, string>[];
+          const data: QuestionItem[] = rows
+            .filter(row => row[config.idColumn] && row[config.textColumn])
+            .map(row => {
+              const optionsRaw = config.optionsColumn ? row[config.optionsColumn] : '';
+              const options = optionsRaw
+                ? optionsRaw.split('/').map(o => o.trim()).filter(Boolean)
+                : [];
+              return {
+                id: String(row[config.idColumn]).trim(),
+                text: String(row[config.textColumn]).trim(),
+                options: options.length > 0 ? options : undefined,
+                category: config.categoryColumn ? row[config.categoryColumn] : undefined,
+                purpose: config.purposeColumn ? row[config.purposeColumn] : undefined,
+                type: config.typeColumn ? row[config.typeColumn] : undefined,
+                typeName: config.typeNameColumn ? row[config.typeNameColumn] : undefined,
+                required: config.requiredColumn ? (row[config.requiredColumn] || 'y') : 'y',
+                answerType: config.answerTypeColumn ? (row[config.answerTypeColumn] || '객관식-단일선택') : '객관식-단일선택',
+              } as QuestionItem;
+            });
+          resolve(data);
+        } catch (error) {
+          reject(error);
         }
-        
-        const headers = lines[0].split(',').map(h => h.trim());
-        console.log('CSV Headers:', headers);
-        const data: QuestionItem[] = [];
-        
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',').map(v => v.trim());
-          
-          // 빈 행 건너뛰기 (모든 값이 비어있으면)
-          if (values.every(v => !v || v === '')) {
-            continue;
-          }
-          
-          // q_id가 없으면 건너뛰기 (필수 필드)
-          if (!values[0] || values[0] === '') {
-            continue;
-          }
-          
-          const row: Record<string, string> = {};
-          
-          headers.forEach((header, index) => {
-            row[header] = values[index] || '';
-          });
-          
-          // options 처리 (슬래시 구분)
-          let options: string[] = [];
-          if (config.optionsColumn && row[config.optionsColumn]) {
-            options = row[config.optionsColumn].split('/').map(o => o.trim()).filter(o => o);
-          }
-          
-          const item = {
-            id: row[config.idColumn],
-            text: row[config.textColumn],
-            options: options.length > 0 ? options : undefined,
-            // 추가 필드들 (필요시 사용)
-            category: config.categoryColumn ? row[config.categoryColumn] : undefined,
-            purpose: config.purposeColumn ? row[config.purposeColumn] : undefined,
-            type: config.typeColumn ? row[config.typeColumn] : undefined,
-            typeName: config.typeNameColumn ? row[config.typeNameColumn] : undefined,
-          } as QuestionItem;
-          
-          console.log(`Row ${i}:`, row);
-          console.log(`Parsed item:`, item);
-          
-          data.push(item);
-        }
-        
-        resolve(data);
-      } catch (error) {
-        reject(error);
-      }
-    };
-    reader.onerror = () => reject(new Error('파일 읽기 실패'));
-    reader.readAsText(file);
+      },
+      error: (error) => reject(new Error(`CSV 파싱 오류: ${error.message}`)),
+    });
   });
 };
 
@@ -108,11 +83,15 @@ export const savePreSurveyQuestions = async (questions: PreSurveyQuestion[]): Pr
     
     if (deleteError) throw deleteError;
     
-    // 새 데이터 삽입
+    // 새 데이터 삽입 (sort_order를 CSV 순서로 지정)
+    const questionsWithOrder = questions.map((q, index) => ({
+      ...q,
+      sort_order: index,
+    }));
     const { error: insertError } = await supabase
       .from('pre_survey_questions')
-      .insert(questions);
-    
+      .insert(questionsWithOrder);
+
     if (insertError) throw insertError;
     
     console.log(`Saved ${questions.length} pre-survey questions to Supabase`);
@@ -153,7 +132,7 @@ export const getPreSurveyQuestions = async (): Promise<QuestionItem[]> => {
     const { data, error } = await supabase
       .from('pre_survey_questions')
       .select('*')
-      .order('q_id');
+      .order('sort_order', { ascending: true });
     
     if (error) throw error;
     
@@ -161,6 +140,8 @@ export const getPreSurveyQuestions = async (): Promise<QuestionItem[]> => {
       id: item.q_id,
       text: item.text_ko,
       options: item.options ? item.options.split('/').map((o: string) => o.trim()).filter((o: string) => o) : undefined,
+      required: item.required ?? 'y',
+      answerType: item.answer_type ?? '객관식-단일선택',
     }));
   } catch (error) {
     console.error('Error loading pre-survey questions:', error);

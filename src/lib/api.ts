@@ -89,10 +89,29 @@ export async function apiPatchPreAnswers(
   lastPointer?: UserProgress["pre_survey"]["last_pointer"]
 ) {
   try {
-    // Convert answers array to JSON object { q_id: value }
-    const answersJson: Record<string, number> = {};
+    // Convert answers array to JSON object
+    const answersJson: Record<string, number | number[] | string> = {};
     answers.forEach(a => {
-      answersJson[a.q_id] = a.value;
+      // 주관식 텍스트 답변
+      if (a.text_value !== undefined) {
+        answersJson[a.q_id] = a.text_value;
+        return;
+      }
+      if (answersJson[a.q_id] === undefined) {
+        answersJson[a.q_id] = a.value;
+      } else {
+        // 같은 q_id에 이미 답변이 있는 경우 (다중 선택)
+        const existing = answersJson[a.q_id];
+        if (Array.isArray(existing)) {
+          if (!existing.includes(a.value)) {
+            existing.push(a.value);
+          }
+        } else if (typeof existing === 'number') {
+          if (existing !== a.value) {
+            answersJson[a.q_id] = [existing, a.value];
+          }
+        }
+      }
     });
 
     // Upsert to responses table
@@ -127,7 +146,7 @@ export async function apiPatchPreAnswers(
   }
 }
 
-export async function apiGetPreResponse(userId: string): Promise<{ status: 'in_progress' | 'completed' | null, answers: Record<string, number> }> {
+export async function apiGetPreResponse(userId: string): Promise<{ status: 'in_progress' | 'completed' | null, answers: Record<string, number | number[] | string> }> {
   try {
     console.log('[apiGetPreResponse] Fetching for userId:', userId);
     
@@ -147,7 +166,7 @@ export async function apiGetPreResponse(userId: string): Promise<{ status: 'in_p
       return { status: null, answers: {} };
     }
 
-    const parsedAnswers = (data.answers as Record<string, number>) || {};
+    const parsedAnswers = (data.answers as Record<string, number | number[]>) || {};
     console.log('[apiGetPreResponse] Parsed answers:', parsedAnswers);
     console.log('[apiGetPreResponse] Answers count:', Object.keys(parsedAnswers).length);
 
@@ -330,25 +349,15 @@ export async function apiCompleteMain(userId: string) {
 
 export async function apiGetReportStatus(userId: string): Promise<'not_started' | 'completed'> {
   try {
-    console.log('[apiGetReportStatus] Checking for userId:', userId);
-    
     const { data, error } = await supabase
       .from('reports')
-      .select('id, enneagram_type, user_id')
+      .select('id, report_data')
       .eq('user_id', userId)
       .maybeSingle();
 
-    console.log('[apiGetReportStatus] Query result:', { data, error });
+    if (error) throw error;
 
-    if (error) {
-      console.error('[apiGetReportStatus] Error:', error);
-      throw error;
-    }
-
-    // Check if report exists AND has meaningful data
-    const hasReport = data && data.id && data.enneagram_type;
-    console.log('[apiGetReportStatus] Has report:', hasReport, 'Data:', data);
-    
+    const hasReport = data?.id && Array.isArray(data?.report_data) && data.report_data.length > 0;
     return hasReport ? 'completed' : 'not_started';
   } catch (error) {
     console.error('Error getting report status:', error);
@@ -358,18 +367,15 @@ export async function apiGetReportStatus(userId: string): Promise<'not_started' 
 
 export async function apiGenerateReport(userId: string) {
   try {
-    // 1. Get user's pre-survey and main-survey responses
+    // 1. 설문 응답 로드
     const { data: preResponse, error: preError } = await supabase
       .from('responses')
       .select('answers')
       .eq('user_id', userId)
       .eq('survey_type', 'pre')
       .maybeSingle();
-    
-    if (preError) {
-      console.error('Error fetching pre-survey:', preError);
-      throw new Error('사전 설문 데이터를 불러올 수 없습니다.');
-    }
+
+    if (preError) throw new Error('사전 설문 데이터를 불러올 수 없습니다.');
 
     const { data: mainResponse, error: mainError } = await supabase
       .from('responses')
@@ -377,106 +383,125 @@ export async function apiGenerateReport(userId: string) {
       .eq('user_id', userId)
       .eq('survey_type', 'main')
       .maybeSingle();
-    
-    if (mainError) {
-      console.error('Error fetching main-survey:', mainError);
-      throw new Error('본 설문 데이터를 불러올 수 없습니다.');
-    }
 
-    if (!preResponse || !mainResponse) {
-      throw new Error('설문 응답이 완료되지 않았습니다.');
-    }
+    if (mainError) throw new Error('본 설문 데이터를 불러올 수 없습니다.');
+    if (!preResponse || !mainResponse) throw new Error('설문 응답이 완료되지 않았습니다.');
 
-    // Convert answers object to array format
-    const preAnswers = Object.entries(preResponse.answers || {}).map(([q_id, value]) => ({
+    // answers 객체 → 배열 변환 (주관식 text_value 포함)
+    const rawPre = preResponse.answers || {};
+    const preAnswers = Object.entries(rawPre).map(([q_id, value]) => ({
       q_id,
-      value: Number(value),
-      ts: Date.now()
+      value: typeof value === 'number' ? value : 0,
+      text_value: typeof value === 'string' ? value : undefined,
+      ts: Date.now(),
     }));
 
     const mainAnswers = Object.entries(mainResponse.answers || {}).map(([q_id, value]) => ({
       q_id,
       value: Number(value),
-      ts: Date.now()
+      ts: Date.now(),
     }));
 
-    // 2. Generate report using OpenAI
+    // 2. OpenAI 호출
     const { generateReportWithOpenAI } = await import('./openai');
     const aiResult = await generateReportWithOpenAI(userId, preAnswers, mainAnswers);
 
-    // 3. Save report to database
-    const reportData = {
-      user_id: userId,
-      enneagram_type: aiResult.enneagram_type,
-      characteristics: aiResult.characteristics,
-      job_recommendations: aiResult.job_recommendations,
-      career_guidance: aiResult.career_guidance,
-      growth_advice: aiResult.growth_advice,
-    };
+    console.log('[apiGenerateReport] sections:', aiResult.sections.map(s => s.key));
 
-    // Upsert report (only one report per user)
+    // 3. DB 저장
+    const firstContent = aiResult.sections[0]?.content ?? '';
+    const enneagramType = firstContent.substring(0, 30) || '분석 완료';
+
     const { data, error } = await supabase
       .from('reports')
-      .upsert(reportData, {
-        onConflict: 'user_id'
-      })
+      .upsert(
+        {
+          user_id: userId,
+          enneagram_type: enneagramType,
+          report_data: aiResult.sections,
+        },
+        { onConflict: 'user_id' }
+      )
       .select()
       .single();
 
-    if (error) {
-      console.error('Error saving report:', error);
-      throw error;
-    }
+    if (error) throw error;
 
-    // 4. Update progress
-    const { error: progressError } = await supabase
+    // 4. 진행 상태 업데이트
+    await supabase
       .from('user_progress')
-      .update({
-        report_status: 'COMPLETED',
-        report_id: data.id,
-      })
+      .update({ report_status: 'COMPLETED', report_id: data.id })
       .eq('user_id', userId);
 
-    if (progressError) {
-      console.error('Error updating progress:', progressError);
-      throw progressError;
-    }
-
-    // 5. Emit event to notify UI components
+    // 5. 이벤트 발행
     eventBus.emit(EVENTS.REPORT_GENERATED, {
       userId,
       reportId: data.id,
-      reportData: {
-        id: data.id,
-        type: data.enneagram_type,
-        characteristics: data.characteristics,
-        job_recommendations: data.job_recommendations,
-        career_guidance: data.career_guidance,
-        growth_advice: data.growth_advice,
-        generated_at: data.generated_at,
-      }
+      report: { id: data.id, report_data: data.report_data, generated_at: data.generated_at },
     });
 
     return {
       id: data.id,
-      type: data.enneagram_type,
-      characteristics: data.characteristics,
-      job_recommendations: data.job_recommendations,
-      career_guidance: data.career_guidance,
-      growth_advice: data.growth_advice,
+      report_data: aiResult.sections,
       generated_at: data.generated_at,
     };
   } catch (error) {
-    console.error('Error generating report:', error);
+    console.error('[apiGenerateReport] Error:', error);
     throw error;
   }
+}
+
+export async function apiPreviewPrompts(email: string) {
+  // 이메일로 userId 조회
+  const { data: userRow, error: userError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', email)
+    .maybeSingle();
+
+  if (userError) throw new Error('사용자 조회 실패');
+  if (!userRow) throw new Error(`이메일 "${email}"에 해당하는 사용자가 없습니다.`);
+
+  const userId = userRow.id;
+
+  // 설문 응답 로드
+  const { data: preResponse } = await supabase
+    .from('responses')
+    .select('answers')
+    .eq('user_id', userId)
+    .eq('survey_type', 'pre')
+    .maybeSingle();
+
+  const { data: mainResponse } = await supabase
+    .from('responses')
+    .select('answers')
+    .eq('user_id', userId)
+    .eq('survey_type', 'main')
+    .maybeSingle();
+
+  const rawPre = preResponse?.answers || {};
+  const preAnswers = Object.entries(rawPre).map(([q_id, value]) => ({
+    q_id,
+    value: typeof value === 'number' ? value : 0,
+    text_value: typeof value === 'string' ? value : undefined,
+    ts: Date.now(),
+  }));
+
+  const mainAnswers = Object.entries(mainResponse?.answers || {}).map(([q_id, value]) => ({
+    q_id,
+    value: Number(value),
+    ts: Date.now(),
+  }));
+
+  const { previewPrompts } = await import('./openai');
+  return previewPrompts(preAnswers, mainAnswers);
 }
 
 export async function apiGetLatestReport(userId: string) {
   try {
     const { data, error } = await supabase
       .from('reports')
-      .select('*')
+      .select('id, report_data, generated_at')
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -484,11 +509,7 @@ export async function apiGetLatestReport(userId: string) {
 
     return {
       id: data.id,
-      type: data.enneagram_type,
-      characteristics: data.characteristics,
-      job_recommendations: data.job_recommendations,
-      career_guidance: data.career_guidance,
-      growth_advice: data.growth_advice,
+      report_data: data.report_data ?? [],
       generated_at: data.generated_at,
     };
   } catch (error) {

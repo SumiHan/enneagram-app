@@ -30,3 +30,13 @@ body {
   @apply border border-slate-300 hover:bg-slate-50;
 }
 
+
+@media print {
+  /* 리포트 내용만 출력 */
+  body * { visibility: hidden; }
+  #print-report, #print-report * { visibility: visible; }
+  #print-report { position: fixed; top: 0; left: 0; width: 100%; }
+
+  /* 페이지 여백 */
+  @page { margin: 20mm; }
+}

@@ -50,8 +50,14 @@ export type DbReport = {
   id: string;
   user_id: string;
   enneagram_type: string;
+  wing?: string | null;
   characteristics: string;
-  job_recommendations: string[];
+  integration_disintegration?: string | null;
+  famous_examples?: string[] | null;
+  major_based_career_path?: string | null;
+  career_guidance?: string | null;
+  growth_advice?: string | null;
+  job_recommendations?: string[] | null;
   generated_at: string;
 };
 

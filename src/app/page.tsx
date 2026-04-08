@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useProgress } from "@/lib/progress-context";
 import { ProgressCard } from "@/components/ProgressCard";
 import { apiGetProgress, apiGetReportStatus, apiGetPreResponse, apiGetMainResponse } from "@/lib/api";
+import { getPreSurveyQuestionsCount } from "@/lib/survey-questions";
 import { useAuth } from "@/lib/auth-context";
 import { useSurveyStatus } from "@/hooks/useSurveyStatus";
 import { eventBus, EVENTS } from "@/lib/event-bus";
@@ -18,6 +19,7 @@ export default function HomePage() {
   const [loadingReport, setLoadingReport] = useState(true);
   const [preAnswerCount, setPreAnswerCount] = useState(0);
   const [mainAnswerCount, setMainAnswerCount] = useState(0);
+  const [preTotalCount, setPreTotalCount] = useState(0);
   
   // Use DB-based survey status hooks (single source of truth)
   const preStatus = useSurveyStatus(userId, 'pre');
@@ -62,10 +64,14 @@ export default function HomePage() {
       console.log('[HomePage] Report status:', status);
       setReportStatus(status);
       
-      // Load pre-survey answer count
-      const preResponse = await apiGetPreResponse(userId);
+      // Load pre-survey question total & answer count
+      const [preResponse, preTotal] = await Promise.all([
+        apiGetPreResponse(userId),
+        getPreSurveyQuestionsCount(),
+      ]);
       const preCount = Object.keys(preResponse.answers || {}).length;
       setPreAnswerCount(preCount);
+      if (preTotal > 0) setPreTotalCount(preTotal);
       
       // Load main-survey answer count
       const mainResponse = await apiGetMainResponse(userId);
@@ -118,7 +124,7 @@ export default function HomePage() {
   }, [userId]);
 
   // Calculate progress text
-  const preTotal = progress?.pre_survey.total_count || 20;
+  const preTotal = preTotalCount || progress?.pre_survey.total_count || 0;
   const mainTotal = 90; // Total 90 questions
   
   const preProgressText = 
