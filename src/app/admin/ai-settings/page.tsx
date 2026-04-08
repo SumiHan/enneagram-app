@@ -285,8 +285,8 @@ export default function AISettingsPage() {
           {([
             ['system', '시스템 프롬프트'],
             ['sections', `사용자 프롬프트 항목 (${activeSections.length}개 활성)`],
-            ['apikey', 'OpenAI API Key'],
             ['preview', '프롬프트 미리보기'],
+            ['apikey', 'OpenAI API Key'],
           ] as const).map(([key, label]) => (
             <button
               key={key}
