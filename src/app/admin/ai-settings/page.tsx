@@ -274,10 +274,8 @@ export default function AISettingsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">AI 설정</h2>
-        <button className="btn btn-outline" onClick={() => router.push('/admin/dashboard')}>← 대시보드</button>
-      </div>
+      <button className="btn btn-outline w-fit" onClick={() => router.push('/admin/dashboard')}>← 대시보드로</button>
+      <h2 className="text-xl font-semibold">AI 설정</h2>
 
       <div className="card">
         {/* 탭 */}

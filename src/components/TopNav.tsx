@@ -17,9 +17,11 @@ export function TopNav() {
   // Hide navigation buttons on login/signup pages
   const isAuthPage = pathname === '/login' || pathname === '/signup';
   
+  if (isAuthPage) return null;
+
   return (
     <div className="flex items-center justify-between mb-4">
-      <Link href="/" className="font-semibold">에니어그램</Link>
+      <Link href="/" className="font-semibold">에니어그램 성향 기반 직무 찾기</Link>
       {user ? (
         <div className="flex items-center gap-3 text-sm">
           <span className="text-slate-600">{user.email}{user.role === "admin" ? " · admin" : ""}</span>

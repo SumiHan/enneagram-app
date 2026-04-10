@@ -363,15 +363,8 @@ export default function AdminQuestionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">설문 문항 수정</h2>
-        <button 
-          className="btn btn-outline"
-          onClick={() => router.push("/admin/dashboard")}
-        >
-          ← 대시보드로
-        </button>
-      </div>
+      <button className="btn btn-outline w-fit" onClick={() => router.push("/admin/dashboard")}>← 대시보드로</button>
+      <h2 className="text-xl font-semibold">설문 문항 수정</h2>
 
       {/* Tab Navigation */}
       <div className="flex border-b">

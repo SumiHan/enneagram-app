@@ -1,14 +1,113 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getPreQuestionsFromStorage, getMainQuestionsFromStorage } from "@/lib/dynamic-questions";
 import type { SurveyAnswer, QuestionItem } from "@/lib/types";
 import { SurveyStatusCell } from "@/components/SurveyStatusCell";
-import { eventBus, EVENTS } from "@/lib/event-bus";
-import { useRealtimeSubscription } from "@/lib/realtime";
 import * as XLSX from 'xlsx';
+import { TYPES, TRIAD_STYLE, TRIADS } from "@/lib/enneagram-data";
+
+function parseTypeNumber(content: string): number | null {
+  const numMatch = content.match(/(\d+)/);
+  if (numMatch) {
+    const n = parseInt(numMatch[1], 10);
+    if (n >= 1 && n <= 9) return n;
+  }
+  const found = TYPES.find(t => content.includes(t.name) || content.includes(t.subtitle));
+  return found?.number ?? null;
+}
+
+const CARD_STYLE = { bg: '#F8F9FA', border: '#E5E7EB' };
+
+function EnneagramTypeCard({ typeNumber }: { typeNumber: number }) {
+  const current = TYPES.find(t => t.number === typeNumber)!;
+  const ts = TRIAD_STYLE[current.triad];
+  const triad = TRIADS.find(tr => tr.key === current.triad)!;
+  const wingTypes = current.wings.map(w => TYPES.find(t => t.number === w)!);
+  const growthType = TYPES.find(t => t.number === current.growth)!;
+  const stressType = TYPES.find(t => t.number === current.stress)!;
+
+  return (
+    <div className="relative mt-5">
+      <div className="absolute -top-3.5 left-4 px-3 py-0.5 text-base font-semibold z-10 text-white" style={{ backgroundColor: '#4F46E5', borderRadius: '6px' }}>1. 에니어그램 유형</div>
+      <div className="p-5 pt-7 rounded-lg border" style={{ backgroundColor: CARD_STYLE.bg, borderColor: CARD_STYLE.border }}>
+        <div className="flex items-baseline gap-1.5 flex-wrap mb-4">
+          <span className="text-3xl font-bold text-slate-800">{current.number}</span>
+          <span className="text-lg font-semibold text-slate-800">{current.name}</span>
+          <span className="text-slate-300">·</span>
+          <span className="text-sm text-slate-400">{current.subtitle}</span>
+        </div>
+        <div className="flex gap-4 mb-4 items-stretch">
+          <div className="sm:w-[180px] shrink-0">
+            <img src={`/images/${current.number}_${current.name}.png`} alt={current.name} className="w-full h-full rounded-lg object-contain" />
+          </div>
+          <div className="flex-1 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ts.nodeActive }} />
+              <span className="text-xs font-medium" style={{ color: ts.textColor }}>{triad.name}</span>
+            </div>
+            <div className="bg-white rounded-lg border border-slate-200 p-3">
+              <div className="text-xs text-slate-400 mb-0.5">핵심 욕구</div>
+              <div className="text-sm text-slate-700">{current.coreDesire}</div>
+            </div>
+            <div className="bg-white rounded-lg border border-slate-200 p-3">
+              <div className="text-xs text-slate-400 mb-0.5">핵심 두려움</div>
+              <div className="text-sm text-slate-700">{current.coreFear}</div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {current.keywords.map(kw => (
+                <span key={kw} className={`text-xs px-2 py-1 rounded-full ${ts.tag}`}>{kw}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="mb-4">
+          <div className="text-xs font-medium mb-2" style={{ color: '#818CF8' }}>날개 (Wings)</div>
+          <div className="grid grid-cols-2 gap-2">
+            {wingTypes.map(w => {
+              const ws = TRIAD_STYLE[w.triad];
+              return (
+                <div key={w.number} className="bg-white rounded-lg border border-slate-200 p-3">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ws.nodeActive }} />
+                    <span className="text-xs text-slate-400">{current.number}w{w.number}</span>
+                  </div>
+                  <div className="text-sm font-semibold text-slate-800">{w.number}. {w.name}</div>
+                  <div className="text-xs text-slate-400 mt-0.5">{w.subtitle}</div>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {w.keywords.slice(0, 3).map(kw => (
+                      <span key={kw} className={`text-xs px-1.5 py-0.5 rounded ${ws.tag}`}>{kw}</span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs font-medium mb-2" style={{ color: '#818CF8' }}>성장 &amp; 스트레스 방향</div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-white rounded-lg border border-slate-200 p-3">
+              <div className="text-xs font-medium text-green-600 mb-1">성장 방향</div>
+              <div className="text-sm font-semibold text-slate-800">{growthType.number}. {growthType.name}</div>
+              <div className="text-xs text-slate-400 mt-0.5">{growthType.subtitle}</div>
+              <div className="text-xs text-slate-500 mt-1.5 leading-snug">건강할 때 이 유형의 장점을 흡수해요</div>
+            </div>
+            <div className="bg-white rounded-lg border border-slate-200 p-3">
+              <div className="text-xs font-medium text-orange-500 mb-1">스트레스 방향</div>
+              <div className="text-sm font-semibold text-slate-800">{stressType.number}. {stressType.name}</div>
+              <div className="text-xs text-slate-400 mt-0.5">{stressType.subtitle}</div>
+              <div className="text-xs text-slate-500 mt-1.5 leading-snug">힘들 때 이 유형의 단점이 나타나요</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 type UserRecord = {
   userId: string;
@@ -26,87 +125,34 @@ type UserRecord = {
   reportData: any;
 };
 
+// Module-level cache: survives navigation, cleared on manual refresh
+let cachedRecords: UserRecord[] | null = null;
+let cachedPreQuestions: QuestionItem[] | null = null;
+let cachedMainQuestions: QuestionItem[] | null = null;
+
 export default function AdminResponsesPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const [records, setRecords] = useState<UserRecord[]>([]);
+  const [records, setRecords] = useState<UserRecord[]>(cachedRecords ?? []);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
-  const [preQuestions, setPreQuestions] = useState<QuestionItem[]>([]);
-  const [mainQuestions, setMainQuestions] = useState<QuestionItem[]>([]);
+  const [preQuestions, setPreQuestions] = useState<QuestionItem[]>(cachedPreQuestions ?? []);
+  const [mainQuestions, setMainQuestions] = useState<QuestionItem[]>(cachedMainQuestions ?? []);
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'pre' | 'main' | 'report'>('pre');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(cachedRecords === null);
   const [currentReportData, setCurrentReportData] = useState<any>(null);
-  
-  // Initialize real-time subscriptions
-  const isRealtimeConnected = useRealtimeSubscription();
+  const [emailSearch, setEmailSearch] = useState('');
 
   useEffect(() => {
     if (user?.role !== "admin") {
       router.replace("/");
       return;
     }
+    // Skip fetch if cache already populated
+    if (cachedRecords !== null) return;
     loadData();
   }, [user, router]);
   
-  // Refresh data on page focus (when user comes back to tab)
-  useEffect(() => {
-    const handleFocus = () => {
-      if (user?.role === "admin") {
-        console.log('Page focused, refreshing data...');
-        loadData();
-      }
-    };
-    
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [user]);
-
-  // Listen for report generation events
-  useEffect(() => {
-    const handleReportGenerated = (data: any) => {
-      // Refresh data when any report is generated
-      loadData();
-      
-      // If we're viewing the report tab for the user who generated the report, refresh report data
-      if (selectedUser && data.userId === selectedUser && activeTab === 'report') {
-        getFreshReportData(selectedUser).then(reportData => {
-          setCurrentReportData(reportData);
-        });
-      }
-    };
-
-    const handleDataUpdated = (data: any) => {
-      // Refresh data when any data is updated
-      loadData();
-      
-      // If we're viewing the report tab for the user whose data was updated, refresh report data
-      if (selectedUser && data.userId === selectedUser && activeTab === 'report') {
-        getFreshReportData(selectedUser).then(reportData => {
-          setCurrentReportData(reportData);
-        });
-      }
-    };
-
-    // Subscribe to events
-    eventBus.on(EVENTS.REPORT_GENERATED, handleReportGenerated);
-    eventBus.on(EVENTS.DATA_UPDATED, handleDataUpdated);
-
-    // Cleanup on unmount
-    return () => {
-      eventBus.off(EVENTS.REPORT_GENERATED, handleReportGenerated);
-      eventBus.off(EVENTS.DATA_UPDATED, handleDataUpdated);
-    };
-  }, [selectedUser, activeTab]);
-
-  // Load fresh report data when report tab is activated
-  useEffect(() => {
-    if (selectedUser && activeTab === 'report') {
-      getFreshReportData(selectedUser).then(reportData => {
-        setCurrentReportData(reportData);
-      });
-    }
-  }, [selectedUser, activeTab]);
 
   const loadData = async () => {
     try {
@@ -137,6 +183,8 @@ export default function AdminResponsesPage() {
         text: q.text_ko // Use text_ko as the text field
       }));
       
+      cachedPreQuestions = mappedPreQuestions;
+      cachedMainQuestions = mappedMainQuestions;
       setPreQuestions(mappedPreQuestions);
       setMainQuestions(mappedMainQuestions);
       
@@ -238,6 +286,7 @@ export default function AdminResponsesPage() {
         });
       }
       
+      cachedRecords = userRecords;
       setRecords(userRecords);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -248,17 +297,6 @@ export default function AdminResponsesPage() {
 
   const selectedRecord = records.find(r => r.userId === selectedUser);
   
-  // Function to refresh selected user data
-  const refreshSelectedUserData = async (userId: string) => {
-    try {
-      // Reload the entire dataset to get fresh data
-      await loadData();
-      console.log(`Refreshed data for user: ${userId}`);
-    } catch (error) {
-      console.error('Error refreshing user data:', error);
-    }
-  };
-
   // Function to get fresh report data for selected user
   const getFreshReportData = async (userId: string) => {
     try {
@@ -448,15 +486,25 @@ export default function AdminResponsesPage() {
 
   return (
     <div className="space-y-4">
+      <button className="btn btn-outline w-fit" onClick={() => router.push("/admin/dashboard")}>← 대시보드로</button>
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">방문자 응답 관리</h2>
         <div className="flex gap-2">
+          <button className="btn btn-outline text-sm" onClick={() => { cachedRecords = null; cachedPreQuestions = null; cachedMainQuestions = null; loadData(); }}>새로고침</button>
           <button className="btn btn-outline text-sm" onClick={selectAll}>전체 선택</button>
           <button className="btn btn-outline text-sm" onClick={deselectAll}>선택 해제</button>
           <button className="btn btn-primary text-sm" onClick={downloadExcel}>엑셀 다운로드</button>
           <button className="btn btn-outline text-sm text-red-600" onClick={bulkDelete}>선택 삭제</button>
         </div>
       </div>
+
+      <input
+        type="text"
+        placeholder="이메일로 검색..."
+        className="input max-w-md"
+        value={emailSearch}
+        onChange={e => setEmailSearch(e.target.value)}
+      />
 
       <div className="card p-6 overflow-x-auto">
         <table className="w-full text-sm">
@@ -477,7 +525,7 @@ export default function AdminResponsesPage() {
             </tr>
           </thead>
           <tbody>
-            {records.map((r) => (
+            {records.filter(r => r.email.toLowerCase().includes(emailSearch.toLowerCase())).map((r) => (
               <tr key={r.userId} className="border-t">
                 <td className="py-2 pr-4">
                   <input
@@ -514,11 +562,12 @@ export default function AdminResponsesPage() {
                   </div>
                 </td>
                 <td className="py-2 text-right">
-                  <button 
-                    className="btn btn-outline text-sm" 
-                    onClick={async () => {
+                  <button
+                    className="btn btn-outline text-sm"
+                    onClick={() => {
+                      setCurrentReportData(r.reportData);
+                      setActiveTab('pre');
                       setSelectedUser(r.userId);
-                      await refreshSelectedUserData(r.userId);
                     }}
                   >
                     상세보기
@@ -539,8 +588,8 @@ export default function AdminResponsesPage() {
 
       {/* Detail Modal */}
       {selectedUser && selectedRecord && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4 pt-12 overflow-y-auto">
+          <div className="bg-white rounded-lg w-full max-w-4xl flex flex-col mb-12">
             {/* Header */}
             <div className="p-6 border-b sticky top-0 bg-white z-10">
               <div className="flex items-center justify-between">
@@ -571,7 +620,7 @@ export default function AdminResponsesPage() {
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="p-6">
               {activeTab === 'pre' && (
                 <div className="space-y-2">
                   <table className="w-full text-sm border-collapse">
@@ -583,7 +632,7 @@ export default function AdminResponsesPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {preQuestions.map((q) => {
+                      {[...preQuestions].sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true })).map((q) => {
                         const answer = selectedRecord.preAnswers.find(a => a.q_id === q.id);
                         return (
                           <tr key={q.id}>
@@ -630,95 +679,13 @@ export default function AdminResponsesPage() {
 
               {activeTab === 'report' && (
                 <div className="space-y-4">
-                  {currentReportData ? (
-                    <>
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold">리포트 상세</h3>
-                        <button 
-                          className="btn btn-outline btn-sm"
-                          onClick={() => {
-                            if (selectedUser) {
-                              getFreshReportData(selectedUser).then(reportData => {
-                                setCurrentReportData(reportData);
-                              });
-                            }
-                          }}
-                        >
-                          새로고침
-                        </button>
-                      </div>
-                      {/* 1. 에니어그램 유형 */}
-                      <div className="card p-4 bg-blue-50">
-                        <h4 className="font-semibold text-blue-900">에니어그램 유형</h4>
-                        <p className="mt-2">{currentReportData.enneagram_type || '-'}</p>
-                      </div>
-                      
-                      {/* 2. 특징 */}
-                      <div className="card p-4">
-                        <h4 className="font-semibold">특징</h4>
-                        <div className="mt-2">
-                          {typeof currentReportData.characteristics === 'string' 
-                            ? <p className="text-slate-700 leading-relaxed">{currentReportData.characteristics}</p>
-                            : <ul className="space-y-1 list-disc list-inside">
-                                {(currentReportData.characteristics || []).map((trait: string, i: number) => (
-                                  <li key={i}>{trait}</li>
-                                ))}
-                              </ul>
-                          }
-                        </div>
-                      </div>
-                      
-                      {/* 3. 진로 가이드 */}
-                      {currentReportData.career_guidance && (
-                        <div className="card p-4">
-                          <h4 className="font-semibold">진로 가이드</h4>
-                          <p className="mt-2 text-slate-700 leading-relaxed whitespace-pre-line">
-                            {currentReportData.career_guidance}
-                          </p>
-                        </div>
-                      )}
-                      
-                      {/* 4. 성장 조언 */}
-                      {currentReportData.growth_advice && (
-                        <div className="card p-4">
-                          <h4 className="font-semibold">성장 조언</h4>
-                          <p className="mt-2 text-slate-700 leading-relaxed whitespace-pre-line">
-                            {currentReportData.growth_advice}
-                          </p>
-                        </div>
-                      )}
-                      
-                      {/* 5. 추천 직업 */}
-                      <div className="card p-4">
-                        <h4 className="font-semibold">추천 직업</h4>
-                        <ul className="mt-2 space-y-1 list-disc list-inside">
-                          {(currentReportData.job_recommendations || []).map((job: string, i: number) => (
-                            <li key={i}>{job}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="card p-4 bg-slate-50">
-                        <h4 className="font-semibold">생성 정보</h4>
-                        <p className="mt-2 text-sm text-slate-600">
-                          생성일: {currentReportData.created_at 
-                            ? new Date(currentReportData.created_at).toLocaleString('ko-KR')
-                            : currentReportData.generated_at 
-                            ? new Date(currentReportData.generated_at).toLocaleString('ko-KR')
-                            : currentReportData.id 
-                            ? `ID: ${currentReportData.id}`
-                            : '정보 없음'
-                          }
-                        </p>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-center text-slate-500 py-8">
-                      <div className="mb-4">
-                        <p>리포트가 아직 생성되지 않았습니다.</p>
-                        <p className="text-sm mt-2">사용자가 본 설문을 완료한 후 리포트를 생성할 수 있습니다.</p>
-                      </div>
-                      <button 
-                        className="btn btn-outline"
+                  {(() => {
+                    const hasNewFormat = currentReportData && Array.isArray(currentReportData.report_data) && currentReportData.report_data.length > 0;
+                    const hasLegacy = currentReportData && (currentReportData.enneagram_type || currentReportData.characteristics || currentReportData.career_guidance);
+
+                    const refreshBtn = (
+                      <button
+                        className="btn btn-outline btn-sm"
                         onClick={() => {
                           if (selectedUser) {
                             getFreshReportData(selectedUser).then(reportData => {
@@ -729,8 +696,97 @@ export default function AdminResponsesPage() {
                       >
                         새로고침
                       </button>
-                    </div>
-                  )}
+                    );
+
+                    if (hasNewFormat) {
+                      return (
+                        <>
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold">리포트 상세</h3>
+                            {refreshBtn}
+                          </div>
+                          <div className="space-y-8">
+                            {currentReportData.report_data.map((section: { key: string; title: string; content: string }, idx: number) => {
+                              if (section.key === 'enneagram_type') {
+                                const typeNumber = parseTypeNumber(section.content);
+                                if (typeNumber) {
+                                  return <EnneagramTypeCard key={section.key} typeNumber={typeNumber} />;
+                                }
+                              }
+                              return (
+                                <div key={section.key} className="relative mt-5">
+                                  <div className="absolute -top-3.5 left-4 px-3 py-0.5 text-base font-semibold z-10 text-white" style={{ backgroundColor: '#4F46E5', borderRadius: '6px' }}>
+                                    {idx + 1}. {section.title}
+                                  </div>
+                                  <div className="p-5 pt-7 rounded-lg border" style={{ backgroundColor: CARD_STYLE.bg, borderColor: CARD_STYLE.border }}>
+                                    <div className="leading-[1.7] text-[14px] [&_strong]:font-semibold [&_em]:italic [&_p]:mb-2 [&_p:last-child]:mb-0" style={{ color: '#6B7280' }}>
+                                      <ReactMarkdown>{typeof section.content === 'string' ? section.content : JSON.stringify(section.content)}</ReactMarkdown>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {currentReportData.generated_at && (
+                              <div className="text-xs text-slate-400 text-right pt-2 border-t">
+                                생성일: {new Date(currentReportData.generated_at).toLocaleString('ko-KR')}
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      );
+                    }
+
+                    if (hasLegacy) {
+                      return (
+                        <>
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold">리포트 상세 <span className="text-xs font-normal text-slate-400 ml-2">(구버전)</span></h3>
+                            {refreshBtn}
+                          </div>
+                          <div className="space-y-4">
+                            {currentReportData.enneagram_type && (
+                              <div className="card p-4 bg-blue-50">
+                                <h4 className="font-semibold text-blue-900">에니어그램 유형</h4>
+                                <p className="mt-2">{currentReportData.enneagram_type}</p>
+                              </div>
+                            )}
+                            {currentReportData.characteristics && (
+                              <div className="card p-4">
+                                <h4 className="font-semibold">특징</h4>
+                                <p className="mt-2 text-slate-700 leading-relaxed whitespace-pre-line">
+                                  {typeof currentReportData.characteristics === 'string'
+                                    ? currentReportData.characteristics
+                                    : JSON.stringify(currentReportData.characteristics)}
+                                </p>
+                              </div>
+                            )}
+                            {currentReportData.career_guidance && (
+                              <div className="card p-4">
+                                <h4 className="font-semibold">진로 가이드</h4>
+                                <p className="mt-2 text-slate-700 leading-relaxed whitespace-pre-line">{currentReportData.career_guidance}</p>
+                              </div>
+                            )}
+                            {currentReportData.growth_advice && (
+                              <div className="card p-4">
+                                <h4 className="font-semibold">성장 조언</h4>
+                                <p className="mt-2 text-slate-700 leading-relaxed whitespace-pre-line">{currentReportData.growth_advice}</p>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      );
+                    }
+
+                    return (
+                      <div className="text-center text-slate-500 py-8">
+                        <div className="mb-4">
+                          <p>리포트가 아직 생성되지 않았습니다.</p>
+                          <p className="text-sm mt-2">사용자가 본 설문을 완료한 후 리포트를 생성할 수 있습니다.</p>
+                        </div>
+                        {refreshBtn}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -738,9 +794,6 @@ export default function AdminResponsesPage() {
         </div>
       )}
 
-      <div>
-        <button className="btn btn-outline" onClick={() => router.push("/admin/dashboard")}>← 대시보드로</button>
-      </div>
     </div>
   );
 }

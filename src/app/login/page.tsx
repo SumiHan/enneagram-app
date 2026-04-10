@@ -53,7 +53,7 @@ export default function LoginPage() {
 
   return (
     <div className="max-w-md mx-auto">
-      <h2 className="text-xl font-semibold mb-4">로그인</h2>
+      <h2 className="text-xl font-semibold mb-4">에니어그램 성향 기반 직무 찾기</h2>
       <form onSubmit={onSubmit} className="card p-6 flex flex-col gap-3">
         <input className="border rounded-md px-3 py-2" placeholder="이메일" value={email} onChange={(e) => setEmail(e.target.value)} />
         <input className="border rounded-md px-3 py-2" placeholder="비밀번호" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />

@@ -91,8 +91,8 @@ export default function AdminQuestionsSimplePage() {
             idColumn: "q_id",
             textColumn: "text_ko",
             optionsColumn: "options",
-            categoryColumn: "카테고리",
-            purposeColumn: "목적 및 활용도",
+            categoryColumn: "category",
+            purposeColumn: "purpose",
             requiredColumn: "required",
             answerTypeColumn: "answer_type",
           });
@@ -240,12 +240,8 @@ export default function AdminQuestionsSimplePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">설문 문항 관리</h2>
-        <button className="btn btn-outline" onClick={() => router.push("/admin/dashboard")}>
-          ← 대시보드로
-        </button>
-      </div>
+      <button className="btn btn-outline w-fit" onClick={() => router.push("/admin/dashboard")}>← 대시보드로</button>
+      <h2 className="text-xl font-semibold">설문 문항 관리</h2>
 
       {/* 탭 */}
       <div className="flex border-b">
@@ -429,7 +425,7 @@ export default function AdminQuestionsSimplePage() {
 
       {/* 설명 수정 모달 */}
       {showDescModal && editingVersion && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 pt-12 overflow-y-auto">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="p-6 border-b">
               <h3 className="text-lg font-semibold">설명 수정</h3>
@@ -482,8 +478,8 @@ export default function AdminQuestionsSimplePage() {
 
       {/* 문항 목록 미리보기 모달 */}
       {showPreviewModal && editingVersion && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 pt-12 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mb-12">
             <div className="p-6 border-b flex justify-between items-center">
               <div>
                 <h3 className="text-lg font-semibold">{editingVersion.filename}</h3>
@@ -501,7 +497,7 @@ export default function AdminQuestionsSimplePage() {
                 닫기
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="p-6">
               <table className="w-full text-sm border-collapse">
                 <thead className="bg-slate-100 sticky top-0">
                   <tr className="text-left text-slate-700 font-semibold">
@@ -513,7 +509,6 @@ export default function AdminQuestionsSimplePage() {
                     {activeTab === "pre" && <th className="py-2 px-3 border w-28">답변유형</th>}
                     {activeTab === "pre" && <th className="py-2 px-3 border w-16">필수</th>}
                     {activeTab === "pre" && <th className="py-2 px-3 border w-40">목적 및 활용도</th>}
-                    {activeTab === "main" && <th className="py-2 px-3 border w-32">유형</th>}
                   </tr>
                 </thead>
                 <tbody className="bg-white">
@@ -549,11 +544,6 @@ export default function AdminQuestionsSimplePage() {
                           {q.purpose || "-"}
                         </td>
                       )}
-                      {activeTab === "main" && (
-                        <td className="py-2 px-3 border text-xs text-slate-600">
-                          {q.typeName || q.type || "-"}
-                        </td>
-                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -565,7 +555,7 @@ export default function AdminQuestionsSimplePage() {
 
       {/* 삭제 확인 모달 */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 pt-12 overflow-y-auto">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="p-6">
               <h3 className="text-lg font-semibold mb-4">삭제 확인</h3>

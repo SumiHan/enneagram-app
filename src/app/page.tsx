@@ -156,7 +156,21 @@ export default function HomePage() {
   return (
     <>
       <div className="flex flex-col gap-5">
-        <h1 className="text-2xl font-bold">에니어그램 성향 분석</h1>
+        {/* 에니어그램 설명 카드 */}
+        <div className="card px-5 py-6 flex items-center justify-between">
+          <div className="flex flex-col gap-1">
+            <h3 className="text-lg font-semibold text-slate-800">에니어그램이란?</h3>
+            <p className="text-slate-600 text-sm leading-relaxed">
+              9가지 핵심 동기로 성격을 분류하는 심리 모델입니다.<br />
+              테스트 전에 유형별 특징과 날개를 미리 살펴보세요.
+            </p>
+          </div>
+          <div className="ml-6 shrink-0">
+            <button className="btn btn-primary" onClick={() => router.push("/enneagram-intro")}>
+              개념 살펴보기
+            </button>
+          </div>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
         <ProgressCard
           title="사전 설문"
