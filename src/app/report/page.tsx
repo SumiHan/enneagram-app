@@ -38,7 +38,8 @@ async function downloadPdf() {
 type ReportSection = {
   key: string;
   title: string;
-  content: string;
+  content: string | Record<string, string>;
+  sub_keys?: { key: string; label: string }[];
 };
 
 type Report = {
@@ -258,18 +259,36 @@ function ReportContent() {
           <div id="pdf-content" style={{ padding: '24px' }}>
             {report.report_data.map((section, idx) => {
               if (section.key === 'enneagram_type') {
-                const typeNumber = parseTypeNumber(section.content);
+                const typeNumber = parseTypeNumber(typeof section.content === 'string' ? section.content : JSON.stringify(section.content));
                 if (typeNumber) {
                   return <EnneagramTypeCard key={section.key} typeNumber={typeNumber} cardStyle={cardStyle} />;
                 }
               }
+              const isNested = section.content !== null && typeof section.content === 'object';
+              const subKeys = section.sub_keys ?? (isNested ? Object.keys(section.content as Record<string, string>).map(k => ({ key: k, label: k })) : []);
               return (
                 <div key={section.key} className="relative mt-10" style={{ paddingTop: '14px' }}>
                   <SectionLabel>{idx + 1}. {section.title}</SectionLabel>
                   <div className="p-5 pt-7 rounded-lg border" style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }}>
-                    <div className="leading-[1.7] text-[14px] [&_strong]:font-semibold [&_em]:italic [&_p]:mb-2 [&_p:last-child]:mb-0" style={{ color: '#6B7280' }}>
-                      <ReactMarkdown>{typeof section.content === 'string' ? section.content : JSON.stringify(section.content)}</ReactMarkdown>
-                    </div>
+                    {isNested ? (
+                      <div className="space-y-4">
+                        {subKeys.map(sk => {
+                          const val = (section.content as Record<string, string>)[sk.key] ?? '';
+                          return (
+                            <div key={sk.key}>
+                              <div className="text-xs font-semibold text-indigo-500 mb-1">{sk.label}</div>
+                              <div className="leading-[1.7] text-[14px] [&_strong]:font-semibold [&_em]:italic [&_p]:mb-2 [&_p:last-child]:mb-0" style={{ color: '#6B7280' }}>
+                                <ReactMarkdown>{val}</ReactMarkdown>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="leading-[1.7] text-[14px] [&_strong]:font-semibold [&_em]:italic [&_p]:mb-2 [&_p:last-child]:mb-0" style={{ color: '#6B7280' }}>
+                        <ReactMarkdown>{section.content as string}</ReactMarkdown>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

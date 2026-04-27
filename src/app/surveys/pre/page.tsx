@@ -213,7 +213,7 @@ export default function PreSurveyPage() {
       await surveyStatus.updateStatus('completed');
       await apiCompletePre(userId);
       await reload();
-      router.push("/");
+      router.push("/dashboard");
     } catch (error) {
       console.error('Failed to complete pre-survey:', error);
       alert('설문 완료 중 오류가 발생했습니다. 다시 시도해주세요.');

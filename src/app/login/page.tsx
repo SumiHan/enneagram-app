@@ -15,7 +15,7 @@ export default function LoginPage() {
   React.useEffect(() => {
     if (!loading && user) {
       console.log('Already logged in, redirecting...');
-      const to = user.role === "admin" ? "/admin/dashboard" : "/";
+      const to = user.role === "admin" ? "/admin/dashboard" : "/dashboard";
       router.replace(to);
     }
   }, [user, loading, router]);
@@ -40,7 +40,7 @@ export default function LoginPage() {
       // Wait a bit for auth state to update
       setTimeout(() => {
         // Will be redirected by useEffect in page.tsx based on user role
-        router.replace('/');
+        router.replace('/dashboard');
       }, 500);
     } catch (e: any) {
       const msg = e?.message ?? "로그인 실패";

@@ -410,7 +410,7 @@ export async function apiGenerateReport(userId: string) {
 
     // 3. DB 저장
     const firstContent = aiResult.sections[0]?.content ?? '';
-    const enneagramType = firstContent.substring(0, 30) || '분석 완료';
+    const enneagramType = (typeof firstContent === 'string' ? firstContent : '').substring(0, 30) || '분석 완료';
 
     const { data, error } = await supabase
       .from('reports')

@@ -1,10 +1,11 @@
 "use client";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { apiPreviewPrompts } from "@/lib/api";
 import type { PromptPreview } from "@/lib/openai";
+import type { SubKey } from "@/lib/supabase";
 
 // ── 타입 ──────────────────────────────────────────────
 type SystemPrompt = {
@@ -25,6 +26,7 @@ type PromptSection = {
   content: string;
   is_active: boolean;
   sort_order: number;
+  sub_keys: SubKey[];
   created_at: string;
   updated_at: string;
 };
@@ -60,6 +62,8 @@ export default function AISettingsPage() {
   const [editingSection, setEditingSection] = useState<PromptSection | null>(null);
   const [showSectionDeleteConfirm, setShowSectionDeleteConfirm] = useState(false);
   const [deletingSectionId, setDeletingSectionId] = useState<string | null>(null);
+  const subKeyLabelRef = useRef<HTMLInputElement>(null);
+  const subKeyKeyRef = useRef<HTMLInputElement>(null);
 
   // 프롬프트 미리보기
   const [previewUserId, setPreviewUserId] = useState('');
@@ -204,6 +208,7 @@ export default function AISettingsPage() {
           section_key: editingSection.section_key,
           description: editingSection.description,
           content: editingSection.content,
+          sub_keys: editingSection.sub_keys,
         }).eq('id', editingSection.id);
         showToast('수정되었습니다.');
       } else {
@@ -213,6 +218,7 @@ export default function AISettingsPage() {
           section_key: editingSection.section_key,
           description: editingSection.description,
           content: editingSection.content,
+          sub_keys: editingSection.sub_keys,
           is_active: false,
           sort_order: maxOrder,
         });
@@ -391,7 +397,7 @@ export default function AISettingsPage() {
               <div className="flex justify-end">
                 <button className="btn btn-primary text-sm"
                   onClick={() => {
-                    setEditingSection({ id: '', title: '', section_key: '', description: '', content: '', is_active: false, sort_order: 0, created_at: '', updated_at: '' });
+                    setEditingSection({ id: '', title: '', section_key: '', description: '', content: '', is_active: false, sort_order: 0, sub_keys: [], created_at: '', updated_at: '' });
                     setShowSectionModal(true);
                   }}>
                   + 새 항목 추가
@@ -408,7 +414,7 @@ export default function AISettingsPage() {
                         <th className="py-2 px-4 w-16">순서</th>
                         <th className="py-2 px-4">항목명</th>
                         <th className="py-2 px-4">섹션 키</th>
-                        <th className="py-2 px-4">설명</th>
+                        <th className="py-2 px-4">하위 키</th>
                         <th className="py-2 px-4 w-24 text-center">보고서 포함</th>
                         <th className="py-2 px-4 text-right">액션</th>
                       </tr>
@@ -430,8 +436,19 @@ export default function AISettingsPage() {
                           <td className="py-2 px-4">
                             <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">{s.section_key}</code>
                           </td>
-                          <td className="py-2 px-4 text-slate-500 max-w-xs truncate">
-                            {s.description || '-'}
+                          <td className="py-2 px-4">
+                            {(s.sub_keys ?? []).length === 0 ? (
+                              <span className="text-slate-300 text-xs">-</span>
+                            ) : (
+                              <div className="flex flex-wrap gap-1">
+                                {(s.sub_keys ?? []).map(sk => (
+                                  <span key={sk.key} className="inline-flex items-center gap-1 text-xs bg-indigo-50 text-indigo-600 border border-indigo-100 rounded px-1.5 py-0.5">
+                                    <span>{sk.label}</span>
+                                    <code className="text-indigo-400">·{sk.key}</code>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </td>
                           <td className="py-2 px-4 text-center">
                             <button
@@ -448,7 +465,7 @@ export default function AISettingsPage() {
                           </td>
                           <td className="py-2 px-4 text-right space-x-2">
                             <button className="btn btn-outline btn-sm"
-                              onClick={() => { setEditingSection(s); setShowSectionModal(true); }}>
+                              onClick={() => { setEditingSection({ ...s, sub_keys: s.sub_keys ?? [] }); setShowSectionModal(true); }}>
                               수정
                             </button>
                             <button className="btn btn-sm bg-red-50 text-red-600 hover:bg-red-100 border-red-200"
@@ -665,6 +682,73 @@ export default function AISettingsPage() {
                 <textarea className="input w-full" rows={10} value={editingSection.content}
                   onChange={e => setEditingSection({ ...editingSection, content: e.target.value })}
                   placeholder="예: 사용자의 에니어그램 유형을 분석하고 핵심 성격 특성을 3-5문장으로 설명해주세요." />
+              </div>
+
+              {/* 하위 키 관리 */}
+              <div className="border rounded-lg p-4 space-y-3 bg-slate-50">
+                <div>
+                  <label className="block font-medium text-sm mb-0.5">하위 키 (선택사항)</label>
+                  <p className="text-xs text-slate-500">
+                    섹션을 여러 항목으로 분리하면 AI가 각 항목별로 구조화된 내용을 생성합니다.
+                  </p>
+                </div>
+
+                {editingSection.sub_keys.length > 0 && (
+                  <div className="space-y-2">
+                    {editingSection.sub_keys.map((sk, i) => (
+                      <div key={i} className="flex items-center gap-2 p-2 bg-white rounded border text-sm">
+                        <span className="flex-1 font-medium">{sk.label}</span>
+                        <code className="text-xs bg-slate-100 border px-1.5 py-0.5 rounded text-slate-600">{sk.key}</code>
+                        <button
+                          type="button"
+                          className="text-red-400 hover:text-red-600 text-xs px-1"
+                          onClick={() => setEditingSection({
+                            ...editingSection,
+                            sub_keys: editingSection.sub_keys.filter((_, j) => j !== i),
+                          })}
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <label className="text-xs text-slate-500 mb-1 block">레이블 (표시용)</label>
+                    <input
+                      ref={subKeyLabelRef}
+                      type="text"
+                      className="input w-full text-sm"
+                      placeholder="예: 핵심 근거"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-xs text-slate-500 mb-1 block">키 (영문)</label>
+                    <input
+                      ref={subKeyKeyRef}
+                      type="text"
+                      className="input w-full text-sm font-mono"
+                      placeholder="예: evidence"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-outline text-sm"
+                    onClick={() => {
+                      const label = subKeyLabelRef.current?.value.trim() ?? '';
+                      const rawKey = subKeyKeyRef.current?.value.trim() ?? '';
+                      const key = rawKey.replace(/[^a-zA-Z0-9_]/g, '');
+                      if (!label || !key) return;
+                      setEditingSection(prev => prev ? { ...prev, sub_keys: [...prev.sub_keys, { label, key }] } : prev);
+                      if (subKeyLabelRef.current) subKeyLabelRef.current.value = '';
+                      if (subKeyKeyRef.current) subKeyKeyRef.current.value = '';
+                    }}
+                  >
+                    + 추가
+                  </button>
+                </div>
               </div>
             </div>
             <div className="p-6 border-t flex gap-2 justify-end">

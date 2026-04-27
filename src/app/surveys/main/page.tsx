@@ -212,8 +212,8 @@ export default function MainSurveyPage() {
       // Then call API to update other tables
       await apiCompleteMain(userId);
       await reload();
-      
-      router.push("/");
+
+      router.push("/dashboard");
     } catch (error) {
       console.error('Failed to complete main survey:', error);
       alert('설문 완료 중 오류가 발생했습니다. 다시 시도해주세요.');

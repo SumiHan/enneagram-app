@@ -3,7 +3,8 @@ import { supabase } from "./supabase";
 export type ReportSection = {
   key: string;
   title: string;
-  content: string;
+  content: string | Record<string, string>;
+  sub_keys?: { key: string; label: string }[];
 };
 
 export type OpenAIReportResult = {
@@ -54,7 +55,18 @@ export async function generateReportWithOpenAI(
     throw new Error('활성화된 사용자 프롬프트 항목이 없습니다. 관리자 설정에서 항목을 활성화해주세요.');
   }
 
-  // 4. 설문 문항 로드
+  // 4. 사용자 이름 로드
+  const { data: userData, error: userError } = await supabase
+    .from('users')
+    .select('name')
+    .eq('id', userId)
+    .single();
+  console.log('[OpenAI] userId:', userId);
+  console.log('[OpenAI] userData:', userData, 'error:', userError);
+  const userName: string = userData?.name ?? '';
+  console.log('[OpenAI] userName:', userName);
+
+  // 5. 설문 문항 로드
   const { data: preQuestions } = await supabase
     .from('pre_survey_questions')
     .select('*')
@@ -65,7 +77,7 @@ export async function generateReportWithOpenAI(
     .select('*')
     .order('q_id');
 
-  // 5. 설문 응답 포맷팅
+  // 6. 설문 응답 포맷팅
   const formattedPre = formatPreSurveyResponses(preAnswers, preQuestions || []);
   const formattedMain = formatMainSurveyResponses(mainAnswers, mainQuestions || []);
 
@@ -80,16 +92,30 @@ export async function generateReportWithOpenAI(
     preAnswers,
     mainAnswers,
     preQuestions || [],
-    mainQuestions || []
+    mainQuestions || [],
+    userName
   );
 
-  // 6. 사용자 프롬프트 조합
+  console.log('[OpenAI] systemPrompt (first 300 chars):', systemPromptContent.slice(0, 300));
+
+  // 7. 사용자 프롬프트 조합
   const sectionBlocks = sections
-    .map(s => `### ${s.title}\n${replacePlaceholders(s.content, formattedPre, formattedMain, preAnswers, mainAnswers, preQuestions || [], mainQuestions || [])}`)
+    .map(s => {
+      const replaced = replacePlaceholders(s.content, formattedPre, formattedMain, preAnswers, mainAnswers, preQuestions || [], mainQuestions || [], userName);
+      console.log(`[OpenAI] section "${s.title}" after replace (first 200):`, replaced.slice(0, 200));
+      return `### ${s.title}\n${replaced}`;
+    })
     .join('\n\n');
 
   const jsonFormat = sections
-    .map(s => `  "${s.section_key}": "내용을 여기에 작성"`)
+    .map(s => {
+      const subKeys = s.sub_keys ?? [];
+      if (subKeys.length > 0) {
+        const inner = subKeys.map((sk: any) => `    "${sk.key}": "내용 (${sk.label})"`).join(',\n');
+        return `  "${s.section_key}": {\n${inner}\n  }`;
+      }
+      return `  "${s.section_key}": "내용을 여기에 작성"`;
+    })
     .join(',\n');
 
   const userPrompt = `${sectionBlocks}
@@ -142,7 +168,7 @@ ${jsonFormat}
   console.log('[OpenAI] response length:', aiText.length);
 
   // 8. JSON 파싱
-  let parsed: Record<string, string> = {};
+  let parsed: Record<string, any> = {};
   try {
     const jsonMatch = aiText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
@@ -155,6 +181,10 @@ ${jsonFormat}
   // 9. 섹션별로 결과 구성
   const resultSections: ReportSection[] = sections.map(s => {
     const raw = parsed[s.section_key] ?? '';
+    const subKeys = s.sub_keys ?? [];
+    if (subKeys.length > 0 && raw && typeof raw === 'object') {
+      return { key: s.section_key, title: s.title, content: raw as Record<string, string>, sub_keys: subKeys };
+    }
     const content = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
     return { key: s.section_key, title: s.title, content };
   });
@@ -231,7 +261,16 @@ export async function previewPrompts(
   const sectionBlocks = activeSections
     .map(s => `### ${s.title}\n${replacePlaceholders(s.content, formattedPre, formattedMain, preAnswers, mainAnswers, preQuestions || [], mainQuestions || [])}`)
     .join('\n\n');
-  const jsonFormat = activeSections.map(s => `  "${s.section_key}": "내용을 여기에 작성"`).join(',\n');
+  const jsonFormat = activeSections
+    .map(s => {
+      const subKeys = s.sub_keys ?? [];
+      if (subKeys.length > 0) {
+        const inner = subKeys.map((sk: any) => `    "${sk.key}": "내용 (${sk.label})"`).join(',\n');
+        return `  "${s.section_key}": {\n${inner}\n  }`;
+      }
+      return `  "${s.section_key}": "내용을 여기에 작성"`;
+    })
+    .join(',\n');
 
   const userPrompt = `${sectionBlocks}
 
@@ -265,6 +304,13 @@ ${jsonFormat}
 //   {{main_survey_responses}}   → 본 설문 전체 응답
 //   {{pre_survey.37}}           → 사전 설문 q_id=37 의 응답 텍스트만
 //   {{main_survey.37}}          → 본 설문 q_id=37 의 응답 텍스트만
+// ── 플레이스홀더 치환 ─────────────────────────────────────────────────────────
+// 지원 문법:
+//   {{user_name}}               → 사용자 이름
+//   {{pre_survey_responses}}    → 사전 설문 전체 응답
+//   {{main_survey_responses}}   → 본 설문 전체 응답
+//   {{pre_survey.37}}           → 사전 설문 q_id=37 의 응답 텍스트만
+//   {{main_survey.37}}          → 본 설문 q_id=37 의 응답 텍스트만
 function replacePlaceholders(
   text: string,
   formattedPre: string,
@@ -272,9 +318,11 @@ function replacePlaceholders(
   preAnswers: any[],
   mainAnswers: any[],
   preQuestions: any[],
-  mainQuestions: any[]
+  mainQuestions: any[],
+  userName: string = ''
 ): string {
   return text
+    .replace(/\{\{user_name\}\}/g, userName)
     .replace(/\{\{pre_survey_responses\}\}/g, formattedPre)
     .replace(/\{\{main_survey_responses\}\}/g, formattedMain)
     .replace(/\{\{pre_survey\.([^}]+)\}\}/g, (_, qId) =>

@@ -85,6 +85,8 @@ export type DbAIPrompt = {
   created_by: string | null;
 };
 
+export type SubKey = { key: string; label: string };
+
 export type DbAISetting = {
   id: string;
   setting_key: string;
