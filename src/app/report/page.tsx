@@ -194,12 +194,19 @@ function ReportContent() {
   const { userId, progress, reload } = useProgress();
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
+  const [progressSteps, setProgressSteps] = useState<{ step: string; pct: number }[]>([]);
   const autoGenerateTriggered = React.useRef(false);
 
   const onGenerate = useCallback(async () => {
     setLoading(true);
+    setProgressSteps([]);
     try {
-      const r = await apiGenerateReport(userId);
+      const r = await apiGenerateReport(userId, (step, pct) => {
+        setProgressSteps(prev => {
+          const filtered = prev.filter(s => s.step !== step);
+          return [...filtered, { step, pct }];
+        });
+      });
       await reload();
       setReport(r as Report);
       eventBus.emit(EVENTS.DATA_UPDATED, { userId });
@@ -207,6 +214,7 @@ function ReportContent() {
       alert(`리포트 생성 중 오류가 발생했습니다: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoading(false);
+      setProgressSteps([]);
     }
   }, [userId, reload]);
 
@@ -304,17 +312,33 @@ function ReportContent() {
           <div className="flex flex-col items-center justify-center py-8 gap-4">
             {loading ? (
               <>
-                <div className="animate-pulse text-center">
-                  <div className="text-lg font-medium text-slate-700 mb-2">
-                    생성형 AI가 리포트를 만들고 있어요. 잠시만 기다려주세요 😀
+                <div className="text-center mb-2">
+                  <div className="text-lg font-medium text-slate-700 mb-1">
+                    AI가 리포트를 분석하고 있어요
                   </div>
-                  <div className="text-sm text-slate-500">평균 10-20초 정도 소요됩니다</div>
+                  <div className="text-sm text-slate-500">보통 20~40초 소요됩니다</div>
                 </div>
-                <div className="flex gap-2">
-                  {[0, 150, 300].map(delay => (
-                    <div key={delay} className="w-3 h-3 bg-blue-500 rounded-full animate-bounce"
-                      style={{ animationDelay: `${delay}ms` }} />
-                  ))}
+                <div className="w-full max-w-sm space-y-2">
+                  {progressSteps.length === 0 ? (
+                    <div className="text-sm text-slate-400 text-center animate-pulse">준비 중...</div>
+                  ) : (
+                    progressSteps.map(({ step, pct }) => (
+                      <div key={step} className="flex items-center gap-3">
+                        <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-slate-600 w-36 shrink-0">{step}</span>
+                        {pct === 100 ? (
+                          <span className="text-green-500 text-xs shrink-0">✓</span>
+                        ) : (
+                          <span className="text-indigo-400 text-xs shrink-0 animate-pulse">...</span>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </>
             ) : (

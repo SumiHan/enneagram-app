@@ -290,7 +290,7 @@ export default function AISettingsPage() {
             ['system', '시스템 프롬프트'],
             ['sections', `사용자 프롬프트 항목 (${activeSections.length}개 활성)`],
             ['preview', '프롬프트 미리보기'],
-            ['apikey', 'OpenAI API Key'],
+            ['apikey', 'Claude API Key'],
           ] as const).map(([key, label]) => (
             <button
               key={key}
@@ -575,11 +575,11 @@ export default function AISettingsPage() {
                 </div>
               )}
               <div className="space-y-2">
-                <label className="block font-medium">OpenAI API Key</label>
+                <label className="block font-medium">Claude API Key</label>
                 {editingApiKey ? (
                   <div className="space-y-2">
                     <input type="text" className="input w-full" value={tempApiKey}
-                      onChange={e => setTempApiKey(e.target.value)} placeholder="sk-..." />
+                      onChange={e => setTempApiKey(e.target.value)} placeholder="sk-ant-..." />
                     <div className="flex gap-2">
                       <button className="btn btn-primary" onClick={handleSaveApiKey}>저장</button>
                       <button className="btn btn-outline" onClick={() => { setEditingApiKey(false); setTempApiKey(''); }}>취소</button>

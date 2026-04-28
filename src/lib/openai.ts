@@ -300,18 +300,12 @@ ${jsonFormat}
 
 // ── 플레이스홀더 치환 ─────────────────────────────────────────────────────────
 // 지원 문법:
-//   {{pre_survey_responses}}    → 사전 설문 전체 응답
-//   {{main_survey_responses}}   → 본 설문 전체 응답
-//   {{pre_survey.37}}           → 사전 설문 q_id=37 의 응답 텍스트만
-//   {{main_survey.37}}          → 본 설문 q_id=37 의 응답 텍스트만
-// ── 플레이스홀더 치환 ─────────────────────────────────────────────────────────
-// 지원 문법:
 //   {{user_name}}               → 사용자 이름
 //   {{pre_survey_responses}}    → 사전 설문 전체 응답
 //   {{main_survey_responses}}   → 본 설문 전체 응답
 //   {{pre_survey.37}}           → 사전 설문 q_id=37 의 응답 텍스트만
 //   {{main_survey.37}}          → 본 설문 q_id=37 의 응답 텍스트만
-function replacePlaceholders(
+export function replacePlaceholders(
   text: string,
   formattedPre: string,
   formattedMain: string,
@@ -333,7 +327,7 @@ function replacePlaceholders(
     );
 }
 
-function formatSinglePreAnswer(qId: string, answers: any[], questions: any[]): string {
+export function formatSinglePreAnswer(qId: string, answers: any[], questions: any[]): string {
   const answer = answers.find(a => String(a.q_id) === qId);
   const question = questions.find(q => String(q.q_id) === qId);
 
@@ -362,7 +356,7 @@ function formatSinglePreAnswer(qId: string, answers: any[], questions: any[]): s
   return `${questionText}\n→ ${answerText}`;
 }
 
-function formatSingleMainAnswer(qId: string, answers: any[], questions: any[]): string {
+export function formatSingleMainAnswer(qId: string, answers: any[], questions: any[]): string {
   const answer = answers.find(a => String(a.q_id) === qId);
   const question = questions.find(q => String(q.q_id) === qId);
 
@@ -376,7 +370,7 @@ function formatSingleMainAnswer(qId: string, answers: any[], questions: any[]): 
 }
 
 // 사전 설문 응답 포맷
-function formatPreSurveyResponses(answers: any[], questions: any[]): string {
+export function formatPreSurveyResponses(answers: any[], questions: any[]): string {
   if (!questions.length) return '사전 설문 질문 정보 없음';
 
   return questions.map((q, idx) => {
@@ -409,7 +403,7 @@ function formatPreSurveyResponses(answers: any[], questions: any[]): string {
 }
 
 // 본 설문 응답 포맷 (리커트 1-6)
-function formatMainSurveyResponses(answers: any[], questions: any[]): string {
+export function formatMainSurveyResponses(answers: any[], questions: any[]): string {
   if (!questions.length) return '본 설문 질문 정보 없음';
 
   const likertLabels = [

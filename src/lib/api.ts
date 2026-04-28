@@ -365,7 +365,7 @@ export async function apiGetReportStatus(userId: string): Promise<'not_started' 
   }
 }
 
-export async function apiGenerateReport(userId: string) {
+export async function apiGenerateReport(userId: string, onProgress?: (step: string, pct: number) => void) {
   try {
     // 1. 설문 응답 로드
     const { data: preResponse, error: preError } = await supabase
@@ -402,9 +402,9 @@ export async function apiGenerateReport(userId: string) {
       ts: Date.now(),
     }));
 
-    // 2. OpenAI 호출
-    const { generateReportWithOpenAI } = await import('./openai');
-    const aiResult = await generateReportWithOpenAI(userId, preAnswers, mainAnswers);
+    // 2. 멀티 에이전트 파이프라인 호출
+    const { generateReportWithAgents } = await import('./agents/orchestrator');
+    const aiResult = await generateReportWithAgents(userId, preAnswers, mainAnswers, onProgress);
 
     console.log('[apiGenerateReport] sections:', aiResult.sections.map(s => s.key));
 
