@@ -148,8 +148,6 @@ export async function apiPatchPreAnswers(
 
 export async function apiGetPreResponse(userId: string): Promise<{ status: 'in_progress' | 'completed' | null, answers: Record<string, number | number[] | string> }> {
   try {
-    console.log('[apiGetPreResponse] Fetching for userId:', userId);
-    
     const { data, error } = await supabase
       .from('responses')
       .select('status, answers')
@@ -157,18 +155,13 @@ export async function apiGetPreResponse(userId: string): Promise<{ status: 'in_p
       .eq('survey_type', 'pre')
       .maybeSingle();
 
-    console.log('[apiGetPreResponse] Query result:', { data, error });
-
     if (error) throw error;
 
     if (!data) {
-      console.log('[apiGetPreResponse] No data found, returning empty');
       return { status: null, answers: {} };
     }
 
     const parsedAnswers = (data.answers as Record<string, number | number[]>) || {};
-    console.log('[apiGetPreResponse] Parsed answers:', parsedAnswers);
-    console.log('[apiGetPreResponse] Answers count:', Object.keys(parsedAnswers).length);
 
     return {
       status: data.status as 'in_progress' | 'completed',
@@ -229,8 +222,6 @@ export async function apiStartMainSession(userId: string, seed: number) {
 
 export async function apiGetMainResponse(userId: string): Promise<{ status: 'in_progress' | 'completed' | null, answers: Record<string, number>, currentPage?: number }> {
   try {
-    console.log('[apiGetMainResponse] Fetching for userId:', userId);
-    
     const { data, error } = await supabase
       .from('responses')
       .select('status, answers')
@@ -238,16 +229,12 @@ export async function apiGetMainResponse(userId: string): Promise<{ status: 'in_
       .eq('survey_type', 'main')
       .maybeSingle();
 
-    console.log('[apiGetMainResponse] Query result:', { data, error });
-
     if (error) throw error;
 
     if (!data) {
-      console.log('[apiGetMainResponse] No data found, returning empty');
       return { status: null, answers: {}, currentPage: 0 };
     }
 
-    // Get current page from user_progress
     const { data: progressData } = await supabase
       .from('user_progress')
       .select('main_survey_current_page')
@@ -255,9 +242,6 @@ export async function apiGetMainResponse(userId: string): Promise<{ status: 'in_
       .single();
 
     const parsedAnswers = (data.answers as Record<string, number>) || {};
-    console.log('[apiGetMainResponse] Parsed answers:', parsedAnswers);
-    console.log('[apiGetMainResponse] Answers count:', Object.keys(parsedAnswers).length);
-    console.log('[apiGetMainResponse] Current page:', progressData?.main_survey_current_page || 0);
 
     return {
       status: data.status as 'in_progress' | 'completed',

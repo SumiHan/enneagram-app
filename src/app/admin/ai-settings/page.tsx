@@ -25,6 +25,7 @@ type PromptSection = {
   description: string | null;
   content: string;
   is_active: boolean;
+  show_as_card: boolean;
   sort_order: number;
   sub_keys: SubKey[];
   created_at: string;
@@ -34,6 +35,7 @@ type PromptSection = {
 type AISettings = {
   id: number;
   openai_api_key: string | null;
+  tavily_api_key: string | null;
   active_prompt_id: string | null;
 };
 
@@ -72,10 +74,14 @@ export default function AISettingsPage() {
   const [previewError, setPreviewError] = useState('');
   const [previewActiveSection, setPreviewActiveSection] = useState<'system' | 'user'>('system');
 
-  // API Key
+  // API Keys
   const [apiKeyMasked, setApiKeyMasked] = useState(true);
   const [editingApiKey, setEditingApiKey] = useState(false);
   const [tempApiKey, setTempApiKey] = useState('');
+
+  const [tavilyKeyMasked, setTavilyKeyMasked] = useState(true);
+  const [editingTavilyKey, setEditingTavilyKey] = useState(false);
+  const [tempTavilyKey, setTempTavilyKey] = useState('');
 
   useEffect(() => {
     if (user?.role !== 'admin') { router.replace('/'); return; }
@@ -177,6 +183,17 @@ export default function AISettingsPage() {
     } catch { showToast('변경 실패', 'error'); } finally { setLoading(false); }
   };
 
+  const handleToggleShowAsCard = async (section: PromptSection) => {
+    setLoading(true);
+    try {
+      await supabase.from('ai_prompt_sections')
+        .update({ show_as_card: !section.show_as_card })
+        .eq('id', section.id);
+      showToast(!section.show_as_card ? '카드로 표시됩니다.' : '카드 표시를 숨겼습니다.');
+      await loadAll();
+    } catch { showToast('변경 실패', 'error'); } finally { setLoading(false); }
+  };
+
   const handleMoveSectionOrder = async (section: PromptSection, direction: 'up' | 'down') => {
     const sorted = [...sections].sort((a, b) => a.sort_order - b.sort_order);
     const idx = sorted.findIndex(s => s.id === section.id);
@@ -272,6 +289,17 @@ export default function AISettingsPage() {
     } catch { showToast('저장 실패', 'error'); } finally { setLoading(false); }
   };
 
+  const handleSaveTavilyKey = async () => {
+    setLoading(true);
+    try {
+      await supabase.from('ai_settings').update({ tavily_api_key: tempTavilyKey }).eq('id', 1);
+      showToast('Tavily API Key가 저장되었습니다.');
+      setEditingTavilyKey(false);
+      setTempTavilyKey('');
+      await loadAll();
+    } catch { showToast('저장 실패', 'error'); } finally { setLoading(false); }
+  };
+
   if (loading && !settings) {
     return <div className="card p-6 text-center text-slate-600">로딩 중...</div>;
   }
@@ -290,7 +318,7 @@ export default function AISettingsPage() {
             ['system', '시스템 프롬프트'],
             ['sections', `사용자 프롬프트 항목 (${activeSections.length}개 활성)`],
             ['preview', '프롬프트 미리보기'],
-            ['apikey', 'Claude API Key'],
+            ['apikey', 'OpenRouter API Key'],
           ] as const).map(([key, label]) => (
             <button
               key={key}
@@ -397,7 +425,7 @@ export default function AISettingsPage() {
               <div className="flex justify-end">
                 <button className="btn btn-primary text-sm"
                   onClick={() => {
-                    setEditingSection({ id: '', title: '', section_key: '', description: '', content: '', is_active: false, sort_order: 0, sub_keys: [], created_at: '', updated_at: '' });
+                    setEditingSection({ id: '', title: '', section_key: '', description: '', content: '', is_active: false, show_as_card: true, sort_order: 0, sub_keys: [], created_at: '', updated_at: '' });
                     setShowSectionModal(true);
                   }}>
                   + 새 항목 추가
@@ -416,6 +444,7 @@ export default function AISettingsPage() {
                         <th className="py-2 px-4">섹션 키</th>
                         <th className="py-2 px-4">하위 키</th>
                         <th className="py-2 px-4 w-24 text-center">보고서 포함</th>
+                        <th className="py-2 px-4 w-24 text-center">카드 표시</th>
                         <th className="py-2 px-4 text-right">액션</th>
                       </tr>
                     </thead>
@@ -460,6 +489,20 @@ export default function AISettingsPage() {
                             >
                               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                                 s.is_active ? 'translate-x-6' : 'translate-x-1'
+                              }`} />
+                            </button>
+                          </td>
+                          <td className="py-2 px-4 text-center">
+                            <button
+                              onClick={() => handleToggleShowAsCard(s)}
+                              disabled={loading || !s.is_active}
+                              title={!s.is_active ? '비활성 섹션은 카드 표시 불가' : ''}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                s.show_as_card && s.is_active ? 'bg-indigo-500' : 'bg-slate-300'
+                              }`}
+                            >
+                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                s.show_as_card && s.is_active ? 'translate-x-6' : 'translate-x-1'
                               }`} />
                             </button>
                           </td>
@@ -575,11 +618,11 @@ export default function AISettingsPage() {
                 </div>
               )}
               <div className="space-y-2">
-                <label className="block font-medium">Claude API Key</label>
+                <label className="block font-medium">OpenRouter API Key</label>
                 {editingApiKey ? (
                   <div className="space-y-2">
                     <input type="text" className="input w-full" value={tempApiKey}
-                      onChange={e => setTempApiKey(e.target.value)} placeholder="sk-ant-..." />
+                      onChange={e => setTempApiKey(e.target.value)} placeholder="sk-or-..." />
                     <div className="flex gap-2">
                       <button className="btn btn-primary" onClick={handleSaveApiKey}>저장</button>
                       <button className="btn btn-outline" onClick={() => { setEditingApiKey(false); setTempApiKey(''); }}>취소</button>
@@ -595,6 +638,39 @@ export default function AISettingsPage() {
                       </button>
                     )}
                     <button className="btn btn-primary" onClick={() => { setEditingApiKey(true); setTempApiKey(settings?.openai_api_key || ''); }}>수정</button>
+                  </div>
+                )}
+              </div>
+
+              {/* Tavily API Key */}
+              <div className="space-y-2 pt-4 border-t">
+                <label className="block font-medium">Tavily API Key
+                  <span className="ml-2 text-xs font-normal text-slate-400">커리어 가이드 실시간 채용 검색용</span>
+                </label>
+                {!settings?.tavily_api_key && (
+                  <div className="bg-blue-50 border border-blue-200 rounded p-3 text-blue-700 text-sm">
+                    설정하면 커리어 가이드 섹션에서 실시간 채용 공고 데이터를 반영합니다.
+                  </div>
+                )}
+                {editingTavilyKey ? (
+                  <div className="space-y-2">
+                    <input type="text" className="input w-full" value={tempTavilyKey}
+                      onChange={e => setTempTavilyKey(e.target.value)} placeholder="tvly-..." />
+                    <div className="flex gap-2">
+                      <button className="btn btn-primary" onClick={handleSaveTavilyKey}>저장</button>
+                      <button className="btn btn-outline" onClick={() => { setEditingTavilyKey(false); setTempTavilyKey(''); }}>취소</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <input type="text" className="input w-full" readOnly
+                      value={settings?.tavily_api_key ? (tavilyKeyMasked ? '••••••••••••••••' : settings.tavily_api_key) : '(설정되지 않음)'} />
+                    {settings?.tavily_api_key && (
+                      <button className="btn btn-outline" onClick={() => setTavilyKeyMasked(!tavilyKeyMasked)}>
+                        {tavilyKeyMasked ? '보기' : '숨기기'}
+                      </button>
+                    )}
+                    <button className="btn btn-primary" onClick={() => { setEditingTavilyKey(true); setTempTavilyKey(settings?.tavily_api_key || ''); }}>수정</button>
                   </div>
                 )}
               </div>

@@ -6,6 +6,7 @@ import { useProgress } from "@/lib/progress-context";
 import { apiGenerateReport, apiGetLatestReport } from "@/lib/api";
 import { eventBus, EVENTS } from "@/lib/event-bus";
 import { TYPES, TRIAD_STYLE, TRIADS } from "@/lib/enneagram-data";
+import type { SkillCard, JobRecommendation } from "@/lib/openai";
 
 async function downloadPdf() {
   const container = document.getElementById("pdf-content");
@@ -40,6 +41,7 @@ type ReportSection = {
   title: string;
   content: string | Record<string, string>;
   sub_keys?: { key: string; label: string }[];
+  show_as_card?: boolean;
 };
 
 type Report = {
@@ -73,7 +75,173 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function EnneagramTypeCard({ typeNumber, cardStyle }: { typeNumber: number; cardStyle: { bg: string; border: string } }) {
+// ── 직무 추천 카드 ─────────────────────────────────────────────────────────────
+
+// **bold** 마크다운 기호만 제거 (이미 CSS로 bold 처리된 요소용)
+function stripMd(text: string): string {
+  return text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1');
+}
+
+const mdInline = { p: ({ children }: any) => <span>{children}</span> };
+
+function JobRecommendationSection({ data }: { data: JobRecommendation }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {/* 도입 요약: 연파랑 배경 + 왼쪽 파랑 세로선 */}
+      {data.summary && (
+        <div style={{
+          backgroundColor: '#EEF2FF',
+          borderLeft: '4px solid #818CF8',
+          borderRadius: '0 10px 10px 0',
+          padding: '16px 20px',
+          fontSize: '14px', color: '#4338CA', lineHeight: 1.8,
+        }} className="[&_strong]:font-semibold [&_p]:m-0">
+          <ReactMarkdown components={mdInline}>{data.summary}</ReactMarkdown>
+        </div>
+      )}
+
+      {/* 추천 직무 3열 그리드 */}
+      {data.jobs?.length > 0 && (
+        <div>
+          <div style={{ fontSize: '12px', color: '#9CA3AF', marginBottom: '10px', fontWeight: 500 }}>추천 직무</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+            {data.jobs.map((job, i) => (
+              <div key={i} style={{ backgroundColor: '#fff', border: '1.5px solid #C7D2FE', borderRadius: '12px', padding: '18px' }}>
+                <div style={{ fontSize: '12px', color: '#818CF8', fontWeight: 700, marginBottom: '6px', letterSpacing: '0.05em' }}>
+                  {String(i + 1).padStart(2, '0')}
+                </div>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: '#111827', marginBottom: '8px' }}>
+                  {stripMd(job.name)}
+                </div>
+                <div style={{ fontSize: '13px', color: '#6B7280', lineHeight: 1.6, marginBottom: '14px' }}
+                  className="[&_strong]:font-semibold [&_p]:m-0">
+                  <ReactMarkdown components={mdInline}>{job.description}</ReactMarkdown>
+                </div>
+                {job.fit_badge && (
+                  <span style={{
+                    display: 'inline-block', fontSize: '12px',
+                    color: '#4338CA', backgroundColor: '#E0E7FF',
+                    borderRadius: '999px', padding: '3px 12px',
+                  }}>
+                    {stripMd(job.fit_badge)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 강점 / 주의 — 2열 */}
+      {(data.strength || data.caution) && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
+          {data.strength && (
+            <div style={{ backgroundColor: '#fff', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '18px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: '#059669', marginBottom: '10px' }}>
+                ◆ 이 유형의 강점
+              </div>
+              <div style={{ fontSize: '13px', color: '#374151', lineHeight: 1.7 }}
+                className="[&_strong]:font-semibold [&_p]:m-0">
+                <ReactMarkdown components={mdInline}>{data.strength}</ReactMarkdown>
+              </div>
+            </div>
+          )}
+          {data.caution && (
+            <div style={{ backgroundColor: '#fff', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '18px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: '#D97706', marginBottom: '10px' }}>
+                △ 주의할 점
+              </div>
+              <div style={{ fontSize: '13px', color: '#374151', lineHeight: 1.7 }}
+                className="[&_strong]:font-semibold [&_p]:m-0">
+                <ReactMarkdown components={mdInline}>{data.caution}</ReactMarkdown>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 스킬 카드 ──────────────────────────────────────────────────────────────────
+
+const CARD_ACCENT_COLORS = [
+  { bg: '#EFF6FF', icon: '#DBEAFE' }, // blue
+  { bg: '#F5F3FF', icon: '#EDE9FE' }, // purple
+  { bg: '#FDF2F8', icon: '#FCE7F3' }, // pink
+  { bg: '#F0FDF4', icon: '#DCFCE7' }, // green
+  { bg: '#FFFBEB', icon: '#FEF3C7' }, // yellow
+  { bg: '#FFF7ED', icon: '#FFEDD5' }, // orange
+];
+
+function getLevelStyle(level: string): { bg: string; color: string } {
+  if (level.includes('실무 활용')) return { bg: '#CCFBF1', color: '#0F766E' };
+  if (level.includes('입문') || level.includes('→')) return { bg: '#E0E7FF', color: '#4338CA' };
+  if (level.includes('심화')) return { bg: '#FEE2E2', color: '#B91C1C' };
+  return { bg: '#F1F5F9', color: '#475569' };
+}
+
+function SkillCardsSection({ skills }: { skills: SkillCard[] }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+      {skills.map((skill, i) => {
+        const accent = CARD_ACCENT_COLORS[i % CARD_ACCENT_COLORS.length];
+        const levelStyle = getLevelStyle(skill.level);
+        return (
+          <div key={i} style={{ backgroundColor: '#fff', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '20px' }}>
+            {/* 아이콘 + 스킬명 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+              <div style={{
+                width: '48px', height: '48px', borderRadius: '12px',
+                backgroundColor: accent.icon,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '24px', flexShrink: 0,
+              }}>
+                {skill.icon}
+              </div>
+              <span style={{ fontSize: '15px', fontWeight: 600, color: '#1E293B' }}>{stripMd(skill.name)}</span>
+            </div>
+            {/* 설명 */}
+            <div style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.6, marginBottom: '16px' }}
+              className="[&_strong]:font-semibold [&_p]:m-0">
+              <ReactMarkdown components={mdInline}>{skill.description}</ReactMarkdown>
+            </div>
+            {/* 구분선 + 강의 정보 */}
+            <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <span style={{ fontSize: '12px', color: '#94A3B8', width: '28px', flexShrink: 0, paddingTop: '2px' }}>강의</span>
+                {skill.course_url ? (
+                  <a
+                    href={skill.course_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: '13px', color: '#4F46E5', textDecoration: 'underline', textUnderlineOffset: '2px', wordBreak: 'break-all' }}
+                  >
+                    {skill.course}
+                  </a>
+                ) : (
+                  <span style={{ fontSize: '13px', color: '#334155' }}>{skill.course}</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '12px', color: '#94A3B8', width: '28px', flexShrink: 0 }}>목표</span>
+                <span style={{
+                  fontSize: '12px', fontWeight: 500,
+                  backgroundColor: levelStyle.bg, color: levelStyle.color,
+                  padding: '2px 10px', borderRadius: '999px',
+                }}>
+                  {skill.level}
+                </span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function EnneagramTypeCard({ typeNumber, cardStyle, characteristicsText }: { typeNumber: number; cardStyle: { bg: string; border: string }; characteristicsText?: string }) {
   const current = TYPES.find(t => t.number === typeNumber)!;
   const ts = TRIAD_STYLE[current.triad];
   const triad = TRIADS.find(tr => tr.key === current.triad)!;
@@ -183,6 +351,18 @@ function EnneagramTypeCard({ typeNumber, cardStyle }: { typeNumber: number; card
             </div>
           </div>
         </div>
+
+        {/* 유형 특성 요약 */}
+        {characteristicsText && (
+          <div className="mt-4">
+            <div className="text-xs font-medium mb-2" style={{ color: '#818CF8' }}>나에 대한 이야기</div>
+            <div className="bg-white rounded-lg border border-slate-200 p-3">
+              <div className="text-sm leading-[1.8] text-slate-600 [&_strong]:font-semibold [&_p]:m-0">
+                <ReactMarkdown components={mdInline}>{characteristicsText}</ReactMarkdown>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -265,13 +445,69 @@ function ReportContent() {
         {report && report.report_data && report.report_data.length > 0 ? (
           /* ① pdf-content: 상하좌우 padding 추가 */
           <div id="pdf-content" style={{ padding: '24px' }}>
-            {report.report_data.map((section, idx) => {
+            {(() => {
+              let visibleIdx = 0;
+              return report.report_data.map((section) => {
+              // show_as_card가 명시적으로 false인 섹션은 독립 카드 렌더링 스킵
+              if (section.show_as_card === false) return null;
+              const idx = visibleIdx++;
+
               if (section.key === 'enneagram_type') {
                 const typeNumber = parseTypeNumber(typeof section.content === 'string' ? section.content : JSON.stringify(section.content));
                 if (typeNumber) {
-                  return <EnneagramTypeCard key={section.key} typeNumber={typeNumber} cardStyle={cardStyle} />;
+                  const charSection = report.report_data.find(s => s.key === 'characteristics');
+                  const charText = typeof charSection?.content === 'string'
+                    ? charSection.content
+                    : charSection?.content && typeof charSection.content === 'object'
+                      ? Object.values(charSection.content as Record<string, string>).join('\n\n')
+                      : undefined;
+                  return <EnneagramTypeCard key={section.key} typeNumber={typeNumber} cardStyle={cardStyle} characteristicsText={charText} />;
                 }
               }
+              // major_based_career_path: 직무 추천 카드 렌더링
+              if (section.key === 'major_based_career_path') {
+                const jobData = section.content as any;
+                if (jobData && typeof jobData === 'object' && (jobData.jobs || jobData.summary)) {
+                  return (
+                    <div key={section.key} className="relative mt-10" style={{ paddingTop: '14px' }}>
+                      <SectionLabel>{idx + 1}. {section.title}</SectionLabel>
+                      <div className="p-5 pt-7 rounded-lg border" style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }}>
+                        <JobRecommendationSection data={jobData as JobRecommendation} />
+                      </div>
+                    </div>
+                  );
+                }
+              }
+
+              // career_guidance: 스킬 카드 렌더링
+              if (section.key === 'career_guidance') {
+                const content = section.content as any;
+                const skills = content?.skills;
+                const skillSummary = content?.skill_summary;
+                if (Array.isArray(skills) && skills.length > 0) {
+                  return (
+                    <div key={section.key} className="relative mt-10" style={{ paddingTop: '14px' }}>
+                      <SectionLabel>{idx + 1}. {section.title}</SectionLabel>
+                      <div className="p-5 pt-7 rounded-lg border" style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }}>
+                        {skillSummary && (
+                          <div style={{
+                            backgroundColor: '#EEF2FF',
+                            borderLeft: '4px solid #818CF8',
+                            borderRadius: '0 10px 10px 0',
+                            padding: '16px 20px',
+                            fontSize: '14px', color: '#4338CA', lineHeight: 1.8,
+                            marginBottom: '20px',
+                          }} className="[&_strong]:font-semibold [&_p]:m-0">
+                            <ReactMarkdown components={mdInline}>{skillSummary}</ReactMarkdown>
+                          </div>
+                        )}
+                        <SkillCardsSection skills={skills} />
+                      </div>
+                    </div>
+                  );
+                }
+              }
+
               const isNested = section.content !== null && typeof section.content === 'object';
               const subKeys = section.sub_keys ?? (isNested ? Object.keys(section.content as Record<string, string>).map(k => ({ key: k, label: k })) : []);
               return (
@@ -300,7 +536,8 @@ function ReportContent() {
                   </div>
                 </div>
               );
-            })}
+            });
+            })()}
 
             {report.generated_at && (
               <div className="text-xs text-slate-400 text-right pt-2 border-t mt-8">

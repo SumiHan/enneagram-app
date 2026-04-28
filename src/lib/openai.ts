@@ -1,196 +1,38 @@
 import { supabase } from "./supabase";
 
+export type JobCard = {
+  name: string;
+  description: string;
+  fit_badge: string;
+};
+
+export type JobRecommendation = {
+  summary: string;
+  jobs: JobCard[];
+  strength: string;
+  caution: string;
+};
+
+export type SkillCard = {
+  icon: string;
+  name: string;
+  description: string;
+  course: string;
+  course_url?: string;
+  level: string;
+};
+
 export type ReportSection = {
   key: string;
   title: string;
-  content: string | Record<string, string>;
+  content: string | Record<string, any>;
   sub_keys?: { key: string; label: string }[];
+  show_as_card?: boolean;
 };
 
 export type OpenAIReportResult = {
   sections: ReportSection[];
 };
-
-export async function generateReportWithOpenAI(
-  userId: string,
-  preAnswers: any[],
-  mainAnswers: any[]
-): Promise<OpenAIReportResult> {
-  // 1. API Key 및 활성 시스템 프롬프트 로드
-  const { data: settings, error: settingsError } = await supabase
-    .from('ai_settings')
-    .select('openai_api_key, active_prompt_id')
-    .eq('id', 1)
-    .single();
-
-  if (settingsError) throw settingsError;
-
-  if (!settings.openai_api_key) {
-    throw new Error('OpenAI API Key가 설정되지 않았습니다. 관리자 설정에서 API Key를 등록해주세요.');
-  }
-
-  // 2. 시스템 프롬프트 로드
-  let systemPromptContent = '당신은 에니어그램 전문가입니다. 사용자의 설문 응답을 분석하여 상세한 리포트를 작성해주세요.';
-  if (settings.active_prompt_id) {
-    const { data: systemPrompt } = await supabase
-      .from('ai_prompts')
-      .select('content')
-      .eq('id', settings.active_prompt_id)
-      .single();
-    if (systemPrompt?.content) {
-      systemPromptContent = systemPrompt.content;
-    }
-  }
-
-  // 3. 활성 사용자 프롬프트 섹션 로드 (sort_order 순)
-  const { data: sections, error: sectionsError } = await supabase
-    .from('ai_prompt_sections')
-    .select('*')
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true });
-
-  if (sectionsError) throw sectionsError;
-
-  if (!sections || sections.length === 0) {
-    throw new Error('활성화된 사용자 프롬프트 항목이 없습니다. 관리자 설정에서 항목을 활성화해주세요.');
-  }
-
-  // 4. 사용자 이름 로드
-  const { data: userData, error: userError } = await supabase
-    .from('users')
-    .select('name')
-    .eq('id', userId)
-    .single();
-  console.log('[OpenAI] userId:', userId);
-  console.log('[OpenAI] userData:', userData, 'error:', userError);
-  const userName: string = userData?.name ?? '';
-  console.log('[OpenAI] userName:', userName);
-
-  // 5. 설문 문항 로드
-  const { data: preQuestions } = await supabase
-    .from('pre_survey_questions')
-    .select('*')
-    .order('sort_order', { ascending: true });
-
-  const { data: mainQuestions } = await supabase
-    .from('main_survey_questions')
-    .select('*')
-    .order('q_id');
-
-  // 6. 설문 응답 포맷팅
-  const formattedPre = formatPreSurveyResponses(preAnswers, preQuestions || []);
-  const formattedMain = formatMainSurveyResponses(mainAnswers, mainQuestions || []);
-
-  console.log('[OpenAI] formattedPre (first 500 chars):', formattedPre.slice(0, 500));
-  console.log('[OpenAI] formattedMain (first 500 chars):', formattedMain.slice(0, 500));
-
-  // 5-1. 시스템 프롬프트의 플레이스홀더 치환
-  systemPromptContent = replacePlaceholders(
-    systemPromptContent,
-    formattedPre,
-    formattedMain,
-    preAnswers,
-    mainAnswers,
-    preQuestions || [],
-    mainQuestions || [],
-    userName
-  );
-
-  console.log('[OpenAI] systemPrompt (first 300 chars):', systemPromptContent.slice(0, 300));
-
-  // 7. 사용자 프롬프트 조합
-  const sectionBlocks = sections
-    .map(s => {
-      const replaced = replacePlaceholders(s.content, formattedPre, formattedMain, preAnswers, mainAnswers, preQuestions || [], mainQuestions || [], userName);
-      console.log(`[OpenAI] section "${s.title}" after replace (first 200):`, replaced.slice(0, 200));
-      return `### ${s.title}\n${replaced}`;
-    })
-    .join('\n\n');
-
-  const jsonFormat = sections
-    .map(s => {
-      const subKeys = s.sub_keys ?? [];
-      if (subKeys.length > 0) {
-        const inner = subKeys.map((sk: any) => `    "${sk.key}": "내용 (${sk.label})"`).join(',\n');
-        return `  "${s.section_key}": {\n${inner}\n  }`;
-      }
-      return `  "${s.section_key}": "내용을 여기에 작성"`;
-    })
-    .join(',\n');
-
-  const userPrompt = `${sectionBlocks}
-
----
-
-## 사전 설문 응답
-${formattedPre}
-
-## 본 설문 응답
-${formattedMain}
-
----
-
-위 내용을 바탕으로 반드시 아래 JSON 형식으로만 응답해주세요. JSON 외 다른 텍스트는 포함하지 마세요:
-{
-${jsonFormat}
-}`;
-
-  // 7. OpenAI API 호출
-  console.log('[OpenAI] system prompt length:', systemPromptContent.length);
-  console.log('[OpenAI] user prompt length:', userPrompt.length);
-  console.log('[OpenAI] sections:', sections.map(s => s.section_key));
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${settings.openai_api_key}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPromptContent },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.7,
-      max_tokens: 4000,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    console.error('[OpenAI] API Error:', errorData);
-    throw new Error(`OpenAI API 호출 실패: ${response.status} ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  const aiText = data.choices?.[0]?.message?.content ?? '';
-  console.log('[OpenAI] response length:', aiText.length);
-
-  // 8. JSON 파싱
-  let parsed: Record<string, any> = {};
-  try {
-    const jsonMatch = aiText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[0]);
-    }
-  } catch (e) {
-    console.error('[OpenAI] JSON parse error:', e);
-  }
-
-  // 9. 섹션별로 결과 구성
-  const resultSections: ReportSection[] = sections.map(s => {
-    const raw = parsed[s.section_key] ?? '';
-    const subKeys = s.sub_keys ?? [];
-    if (subKeys.length > 0 && raw && typeof raw === 'object') {
-      return { key: s.section_key, title: s.title, content: raw as Record<string, string>, sub_keys: subKeys };
-    }
-    const content = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
-    return { key: s.section_key, title: s.title, content };
-  });
-
-  return { sections: resultSections };
-}
 
 export type PromptPreview = {
   systemPrompt: string;
@@ -204,7 +46,6 @@ export async function previewPrompts(
   preAnswers: any[],
   mainAnswers: any[]
 ): Promise<PromptPreview> {
-  // 1. 활성 시스템 프롬프트 로드
   const { data: settings } = await supabase
     .from('ai_settings')
     .select('active_prompt_id')
@@ -223,14 +64,12 @@ export async function previewPrompts(
     }
   }
 
-  // 2. 활성 사용자 프롬프트 섹션 로드
   const { data: sections } = await supabase
     .from('ai_prompt_sections')
     .select('*')
     .eq('is_active', true)
     .order('sort_order', { ascending: true });
 
-  // 3. 설문 문항 로드
   const { data: preQuestions } = await supabase
     .from('pre_survey_questions')
     .select('*')
@@ -241,11 +80,9 @@ export async function previewPrompts(
     .select('*')
     .order('q_id');
 
-  // 4. 포맷팅
   const formattedPre = formatPreSurveyResponses(preAnswers, preQuestions || []);
   const formattedMain = formatMainSurveyResponses(mainAnswers, mainQuestions || []);
 
-  // 5. 시스템 프롬프트 플레이스홀더 치환
   const finalSystemPrompt = replacePlaceholders(
     systemPromptContent,
     formattedPre,
@@ -256,7 +93,6 @@ export async function previewPrompts(
     mainQuestions || []
   );
 
-  // 6. 사용자 프롬프트 조합
   const activeSections = sections || [];
   const sectionBlocks = activeSections
     .map(s => `### ${s.title}\n${replacePlaceholders(s.content, formattedPre, formattedMain, preAnswers, mainAnswers, preQuestions || [], mainQuestions || [])}`)
@@ -369,7 +205,6 @@ export function formatSingleMainAnswer(qId: string, answers: any[], questions: a
   return `${questionText}\n→ ${value}점 (${label})`;
 }
 
-// 사전 설문 응답 포맷
 export function formatPreSurveyResponses(answers: any[], questions: any[]): string {
   if (!questions.length) return '사전 설문 질문 정보 없음';
 
@@ -379,7 +214,6 @@ export function formatPreSurveyResponses(answers: any[], questions: any[]): stri
 
     let answerText = String(answer.value);
 
-    // 주관식 텍스트 답변
     if (answer.text_value) {
       answerText = answer.text_value;
     } else if (q.options) {
@@ -388,7 +222,6 @@ export function formatPreSurveyResponses(answers: any[], questions: any[]): stri
         : q.options;
 
       if (Array.isArray(answer.value)) {
-        // 다중 선택
         answerText = answer.value
           .map((v: number) => optionsArray[v - 1] ?? `선택 ${v}`)
           .join(', ');
@@ -402,7 +235,6 @@ export function formatPreSurveyResponses(answers: any[], questions: any[]): stri
   }).join('\n\n');
 }
 
-// 본 설문 응답 포맷 (리커트 1-6)
 export function formatMainSurveyResponses(answers: any[], questions: any[]): string {
   if (!questions.length) return '본 설문 질문 정보 없음';
 
