@@ -39,12 +39,32 @@ src/lib/
 ├── types.ts                 ← 공통 타입 (UserProgress, SurveyAnswer 등)
 └── enneagram-data.ts        ← TYPES, TRIADS, TRIAD_STYLE (정적 데이터)
 
+src/data/
+├── enneagram_job_mapping.json   ← 워크넷 직업 × 에니어그램 유형 적합도 (LLM-as-Judge 검증)
+└── job_persona_map.json         ← Nemotron 직업 페르소나 맵 (189개 직업 × 최대 5개 페르소나)
+
 src/app/
-├── report/page.tsx          ← 리포트 뷰어 (카드 UI 렌더링)
-├── admin/ai-settings/       ← AI 설정 관리 UI
+├── report/page.tsx          ← 리포트 뷰어 (공용 ReportViewer 컴포넌트 사용)
+├── admin/
+│   ├── ai-settings/         ← AI 설정 관리 UI
+│   ├── responses/page.tsx   ← 방문자 응답 관리 + 엑셀 다운로드
+│   └── dashboard/page.tsx   ← 관리자 대시보드
 ├── surveys/pre/             ← 사전 설문
 ├── surveys/main/            ← 본 설문 (Likert 6점)
 └── dashboard/               ← 사용자 대시보드
+
+src/components/
+└── ReportViewer.tsx         ← 리포트 렌더링 공용 컴포넌트 (report/page + admin/responses 공유)
+
+reference/
+├── build_persona_map.py     ← Nemotron 스트리밍 → job_persona_map.json 빌드 스크립트
+├── make_doc.py              ← Word 문서 생성 스크립트 (발표자료_데이터셋구축및검증.docx)
+└── data/
+    ├── job_list_raw.json        ← 워크넷 직업 원본 목록 (462개)
+    ├── job_persona_map.json     ← 빌드 원본 (src/data와 동일)
+    ├── enneagram_job_mapping.json
+    ├── judged_all.json          ← LLM-as-Judge 검증 결과 전체
+    └── judged_sample.json
 ```
 
 ---
@@ -59,7 +79,8 @@ TypeClassifier (temperature=0)
 
 SectionWriter × N (temperature=0.5, Promise.all 병렬)
   → 각 섹션별 도메인 시스템 프롬프트 사용 (DOMAIN_SYSTEMS)
-  → career_guidance만 Tavily 웹 검색 선행
+  → career_guidance: Tavily 웹 검색 선행
+  → major_based_career_path: 워크넷 검증 직업 목록 RAG 주입
   → JSON 형식으로 출력
 ```
 
@@ -88,7 +109,11 @@ const WRITER_MODEL = 'openai/gpt-4o-mini';
 
 ---
 
-## 리포트 렌더링 (`src/app/report/page.tsx`)
+## 리포트 렌더링 (`src/components/ReportViewer.tsx`)
+
+### 공용 컴포넌트 (2025-05-25 추출)
+- `report/page.tsx`와 `admin/responses/page.tsx` 양쪽에서 동일하게 사용
+- Export: `ReportViewer`, `EnneagramTypeCard`, `parseTypeNumber`, `ReportSection` 타입
 
 ### 특수 렌더링 섹션
 - `enneagram_type` → `EnneagramTypeCard` 컴포넌트
@@ -100,10 +125,6 @@ const WRITER_MODEL = 'openai/gpt-4o-mini';
 - `section.show_as_card === false`이면 독립 카드 렌더링 스킵
 - 단, `report_data`에는 데이터가 존재 (다른 카드에서 참조 가능)
 - 현재 `characteristics`를 이 방식으로 유형 카드에 임베드하도록 설계
-
-### 넘버링
-- `show_as_card === false` 섹션은 번호 카운트에서 제외
-- `visibleIdx` 변수로 별도 추적
 
 ---
 
@@ -120,36 +141,103 @@ const WRITER_MODEL = 'openai/gpt-4o-mini';
 
 ---
 
-## 관리자 UI 주요 기능 (`/admin/ai-settings`)
+## 관리자 UI 주요 기능 (`/admin`)
 
+### `/admin/ai-settings`
 - **시스템 프롬프트 탭**: 여러 프롬프트 관리, 활성화 전환
 - **섹션 탭**: 각 리포트 섹션 프롬프트 + 활성화/카드표시 토글 + sub_keys 설정
 - **API Key 탭**: OpenRouter / Tavily API Key 등록
 - **미리보기 탭**: 사용자 이메일로 실제 프롬프트 미리보기
 
+### `/admin/responses`
+- 방문자 응답 목록 + 탭(리포트 / 사전설문 / 본설문 / 인터뷰)
+- **엑셀 다운로드** (2025-05-25 개선):
+  - 시트 1 — 리포트: 이메일, 에니어그램 유형, 추천 직무(쉼표 구분), 커리어 가이드 키워드
+  - 시트 2 — 인터뷰: Q1(유형 일치도 숫자→레이블), Q2~Q5 텍스트 응답 전체
+
+---
+
+## Nemotron 직업 페르소나 데이터 (특허 고도화 핵심)
+
+### 데이터 현황
+- **출처**: `nvidia/Nemotron-Personas-Korea` (HuggingFace) — 100만 레코드, 700만 페르소나
+- **핵심 필드**: `occupation` (직업명), `professional_persona` (직업 종사자 서사 텍스트)
+- **빌드 결과**: `src/data/job_persona_map.json`
+  - 189개 직업 × 최대 5개 페르소나 (각 100~200자 한국어 서사)
+  - 워크넷 462개 직업 중 189개 커버 (~41%)
+  - 매칭 방식: 정확 일치 → WorkNet명이 occ에 포함 → occ가 WorkNet명에 포함
+  - 무직(36.57%) 제거
+
+### 현재 코드 상태
+- `job_persona_map.json`은 `src/data/`에 존재하고 `orchestrator.ts`에 import됨
+- `getPersonasForJobs()` 함수도 `orchestrator.ts`에 존재
+- **단, 현재 실제 AI 프롬프트에는 미주입 상태** (불안정 판단으로 렌더링만 제거)
+- 즉, 인프라는 갖춰져 있고 "어떻게 활용할지"만 결정하면 됨
+
+### 특허 관점 핵심 차별점
+```
+에니어그램 유형 분류 (TypeClassifier)
+  + 워크넷 공공 직업 데이터 (LLM-as-Judge 검증)
+  + Nemotron 직업 페르소나 (실제 종사자 서사)
+  = 개인화된 진로 리포트
+```
+
+#### 기존 시스템과의 차이
+| 항목 | 기존 | 본 시스템 |
+|---|---|---|
+| 직업 추천 근거 | AI 내부 학습 데이터 | 워크넷 공공 데이터 + LLM-as-Judge 검증 점수 |
+| 직무 적합도 표현 | 일반적 설명 | 실제 종사자 페르소나 서사 기반 |
+| 검증 방식 | 없음 | judge_score + grade(A/B/C) 체계 |
+| 데이터 출처 투명성 | 불명확 | 워크넷 + Nemotron 명시 가능 |
+
 ---
 
 ## 다음 개발 예정 작업
 
-### 우선순위 높음
-- [ ] `major_based_career_path`에 Tavily 연동
-  - 현재: AI 내부 학습 데이터만 사용
-  - 목표: `career_guidance`처럼 실시간 채용 데이터 기반 직무 추천
-  - 참고: `orchestrator.ts`의 `searchCareerData()`, `career_guidance` Tavily 로직을 참고해서 동일하게 적용
+### 우선순위 높음 — 페르소나 활용 방식 고도화 (특허 연계)
+
+현재 `job_persona_map.json`과 `getPersonasForJobs()` 함수가 준비되어 있음.
+아래 중 하나 또는 복합으로 활용 방식을 결정해야 함:
+
+#### 옵션 A: 직무 적합도 점수에 페르소나 문체 반영
+- TypeClassifier가 분류한 유형 → 워크넷 상위 직업 추출
+- 해당 직업의 페르소나 텍스트를 임베딩하여 사용자 응답과 유사도 계산
+- 유사도가 높은 직업을 우선 추천 (현재는 judge_score만 사용)
+- **특허 포인트**: "설문 응답 임베딩 × 직업 페르소나 임베딩 코사인 유사도 기반 매칭"
+
+#### 옵션 B: 리포트 서사 품질 향상 (RAG 프롬프트)
+- `major_based_career_path` 섹션 생성 시 추천 직업의 페르소나 텍스트를 컨텍스트로 주입
+- AI가 실제 종사자 특성을 참조하여 더 생생한 직무 설명 생성
+- **이전 시도**: `connection` 필드로 구현했으나 출력 품질 불안정으로 롤백
+- **개선 방향**: `connection`을 별도 필드로 추가하는 대신 `description`이나 `fit_badge` 품질 자체를 높이는 방향으로 재시도
+
+#### 옵션 C: LLM-as-Judge 검증 파이프라인 고도화
+- 현재: `judged_all.json` (462직업 × 9유형 매칭 점수 존재)
+- 개선: 페르소나 텍스트를 Judge 프롬프트에 포함하여 적합도 재평가
+- "이 페르소나를 가진 사람이 이 에니어그램 유형과 얼마나 일치하는가"
+
+### 우선순위 중간
+- [ ] `major_based_career_path`에 Tavily 연동 강화
+  - 현재: 워크넷 검증 직업 목록 주입 + Tavily 검색 결과 병행
+  - 목표: 실시간 채용공고 데이터와 연계
 
 ### 우선순위 낮음
-- [ ] 배포 이후 Vercel 환경 변수 확인
 - [ ] 리포트 PDF 다운로드 스타일 최적화
+- [ ] 워크넷 직업 커버리지 41% → 70% 이상으로 확대 (build_persona_map.py 샘플 수 증가)
 
 ---
 
 ## 주요 결정 사항 (히스토리)
 
-| 결정 | 이유 |
-|---|---|
-| OpenRouter 사용 | Anthropic/OpenAI 직접 결제 불가 → OpenRouter로 통합 |
-| TypeClassifier 분리 (temperature=0) | 유형이 섹션마다 달라지는 불일치 문제 해결 |
-| Tavily를 career_guidance에만 적용 | major_based_career_path는 아직 미적용 (다음 작업) |
-| show_as_card 도입 | characteristics를 유형 카드에 임베드하면서 독립 카드는 숨기기 위해 |
-| characteristics → 유형 카드 임베드 | "나에 대한 이야기" 박스로 에니어그램 유형 카드에 통합 |
-| max_tokens: 1200 | OpenRouter 토큰 한도 오류 방지 |
+| 날짜 | 결정 | 이유 |
+|---|---|---|
+| - | OpenRouter 사용 | Anthropic/OpenAI 직접 결제 불가 → OpenRouter로 통합 |
+| - | TypeClassifier 분리 (temperature=0) | 유형이 섹션마다 달라지는 불일치 문제 해결 |
+| - | Tavily를 career_guidance에만 적용 | major_based_career_path는 RAG 방식으로 대체 |
+| - | show_as_card 도입 | characteristics를 유형 카드에 임베드하면서 독립 카드는 숨기기 위해 |
+| - | max_tokens: 1200 | OpenRouter 토큰 한도 오류 방지 |
+| 2025-05-25 | ReportViewer 공용 컴포넌트 추출 | report/page와 admin/responses 렌더링 중복 제거 |
+| 2025-05-25 | 엑셀 다운로드 개선 | 리포트(유형+직무+키워드) + 인터뷰(Q1~Q5) 시트 추가 |
+| 2025-05-25 | 모바일 TopNav 레이아웃 개편 | 제목+이메일 좌측 세로스택, 로그아웃 우측 고정 |
+| 2025-05-25 | Nemotron 페르소나 맵 빌드 | 189개 직업 페르소나 확보, src/data에 저장 |
+| 2025-05-25 | connection 필드 롤백 | 페르소나 RAG → connection 출력 품질 불안정, 인프라만 유지 |
