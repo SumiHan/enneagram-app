@@ -265,7 +265,7 @@ function EnneagramTypeCard({ typeNumber, cardStyle, characteristicsText }: { typ
         {/* 하단 2열 */}
         <div className="flex gap-4 mb-4 items-stretch">
           {/* 왼쪽: 캐릭터 이미지 */}
-          <div className="sm:w-[180px] shrink-0">
+          <div className="w-[110px] sm:w-[180px] shrink-0">
             <img
               src={`/images/${current.number}_${current.name}.png`}
               alt={current.name}
@@ -548,36 +548,54 @@ function ReportContent() {
         ) : (
           <div className="flex flex-col items-center justify-center py-8 gap-4">
             {loading ? (
-              <>
-                <div className="text-center mb-2">
-                  <div className="text-lg font-medium text-slate-700 mb-1">
+              <div className="w-full max-w-sm flex flex-col gap-5">
+                {/* 헤더 */}
+                <div className="text-center">
+                  <div className="text-base font-semibold text-slate-700 mb-1">
                     AI가 리포트를 분석하고 있어요
                   </div>
-                  <div className="text-sm text-slate-500">보통 20~40초 소요됩니다</div>
+                  <div className="text-sm text-slate-400">보통 20~40초 소요됩니다</div>
                 </div>
-                <div className="w-full max-w-sm space-y-2">
+
+                {/* 전체 프로그레스 바 */}
+                <div>
+                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-500 rounded-full transition-all duration-700"
+                      style={{
+                        width: progressSteps.length === 0 ? '4%' :
+                          `${Math.round(progressSteps.reduce((s, x) => s + x.pct, 0) / progressSteps.length)}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* 단계 리스트 */}
+                <div className="flex flex-col gap-2">
                   {progressSteps.length === 0 ? (
                     <div className="text-sm text-slate-400 text-center animate-pulse">준비 중...</div>
                   ) : (
                     progressSteps.map(({ step, pct }) => (
                       <div key={step} className="flex items-center gap-3">
-                        <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-indigo-500 rounded-full transition-all duration-500"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <span className="text-xs text-slate-600 w-36 shrink-0">{step}</span>
                         {pct === 100 ? (
-                          <span className="text-green-500 text-xs shrink-0">✓</span>
+                          <span className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                            <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                              <path d="M2 5.5L4.5 8L9 3" stroke="#16a34a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          </span>
                         ) : (
-                          <span className="text-indigo-400 text-xs shrink-0 animate-pulse">...</span>
+                          <span className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                            <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                          </span>
                         )}
+                        <span className={`text-sm transition-colors ${pct === 100 ? 'text-slate-500' : 'text-indigo-600 font-medium'}`}>
+                          {step}
+                        </span>
                       </div>
                     ))
                   )}
                 </div>
-              </>
+              </div>
             ) : (
               <>
                 <p className="text-slate-600">리포트를 생성하여 결과를 확인하세요.</p>
