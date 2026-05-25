@@ -119,9 +119,9 @@ function JobRecommendationSection({ data }: { data: JobRecommendation }) {
                 </div>
                 {job.fit_badge && (
                   <span style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px',
                     color: '#4338CA', backgroundColor: '#E0E7FF',
-                    borderRadius: '999px', padding: '3px 12px', lineHeight: 1,
+                    borderRadius: '999px', padding: '3px 12px', lineHeight: 1, width: 'fit-content',
                   }}>
                     {stripMd(job.fit_badge)}
                   </span>
@@ -226,7 +226,7 @@ function SkillCardsSection({ skills }: { skills: SkillCard[] }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <span style={{ fontSize: '12px', color: '#94A3B8', width: '28px', flexShrink: 0 }}>목표</span>
                 <span style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
                   fontSize: '12px', fontWeight: 500,
                   backgroundColor: levelStyle.bg, color: levelStyle.color,
                   padding: '2px 10px', borderRadius: '999px',
@@ -294,7 +294,7 @@ function EnneagramTypeCard({ typeNumber, cardStyle, characteristicsText }: { typ
                 <span
                   key={kw}
                   className={`text-xs px-2 rounded-full ${ts.tag}`}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, height: '22px' }}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, height: '22px' }}
                 >
                   {kw}
                 </span>
@@ -322,7 +322,7 @@ function EnneagramTypeCard({ typeNumber, cardStyle, characteristicsText }: { typ
                       <span
                         key={kw}
                         className={`text-xs px-1.5 rounded ${ws.tag}`}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, height: '20px' }}
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, height: '20px' }}
                       >
                         {kw}
                       </span>
