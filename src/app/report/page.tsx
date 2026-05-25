@@ -106,7 +106,7 @@ function JobRecommendationSection({ data }: { data: JobRecommendation }) {
           <div style={{ fontSize: '12px', color: '#9CA3AF', marginBottom: '10px', fontWeight: 500 }}>추천 직무</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
             {data.jobs.map((job, i) => (
-              <div key={i} style={{ backgroundColor: '#fff', border: '1.5px solid #C7D2FE', borderRadius: '12px', padding: '18px' }}>
+              <div key={i} style={{ backgroundColor: '#fff', border: '1.5px solid #C7D2FE', borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ fontSize: '12px', color: '#818CF8', fontWeight: 700, marginBottom: '6px', letterSpacing: '0.05em' }}>
                   {String(i + 1).padStart(2, '0')}
                 </div>
@@ -122,6 +122,7 @@ function JobRecommendationSection({ data }: { data: JobRecommendation }) {
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px',
                     color: '#4338CA', backgroundColor: '#E0E7FF',
                     borderRadius: '999px', padding: '3px 12px', lineHeight: 1, width: 'fit-content',
+                    marginTop: 'auto',
                   }}>
                     {stripMd(job.fit_badge)}
                   </span>
