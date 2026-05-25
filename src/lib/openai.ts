@@ -11,7 +11,6 @@ export type JobRecommendation = {
   jobs: JobCard[];
   strength: string;
   caution: string;
-  connection?: string;
 };
 
 export type SkillCard = {
