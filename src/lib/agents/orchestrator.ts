@@ -7,6 +7,7 @@ import {
 } from '../openai';
 import type { ReportSection } from '../openai';
 import jobMappingRaw from '../../data/enneagram_job_mapping.json';
+import jobPersonaMapRaw from '../../data/job_persona_map.json';
 
 export type ProgressCallback = (step: string, pct: number) => void;
 
@@ -168,6 +169,7 @@ type JobFit = { type: number; name: string; score: number; grade: string };
 type JobEntry = { job_code: string; job_name: string; category: string; enneagram_fit: JobFit[] };
 
 const jobMapping = jobMappingRaw as JobEntry[];
+const jobPersonaMap = jobPersonaMapRaw as Record<string, string[]>;
 
 function getJobsForType(typeNumber: number, limit = 12): string {
   const jobs = jobMapping
@@ -180,6 +182,17 @@ function getJobsForType(typeNumber: number, limit = 12): string {
   return jobs
     .map(j => `- ${j.job_name} [${j.category}]`)
     .join('\n');
+}
+
+function getPersonasForJobs(jobNames: string[]): string {
+  const blocks: string[] = [];
+  for (const name of jobNames) {
+    const personas = jobPersonaMap[name];
+    if (personas && personas.length > 0) {
+      blocks.push(`### ${name}\n${personas.slice(0, 2).map((p, i) => `${i + 1}. ${p}`).join('\n')}`);
+    }
+  }
+  return blocks.join('\n\n');
 }
 
 // ── OpenRouter 호출 공통 함수 ─────────────────────────────────────────────────
@@ -397,7 +410,8 @@ async function runSectionWriter(
       }
     ],
     "strength": "이 유형의 직무 강점 2문장 이내",
-    "caution": "주의할 점 2문장 이내"
+    "caution": "주의할 점 2문장 이내",
+    "connection": "추천 직무에서 실제로 일하는 사람들의 이야기를 바탕으로, 이 유형의 사람이 해당 직무에서 어떤 방식으로 빛나는지를 2~3문장으로 생생하게 서술하세요. 페르소나 데이터의 구체적인 장면(예: 어떤 상황, 어떤 습관, 어떤 태도)을 녹여서 현실감 있게 작성하세요."
   }`;
   } else if (section.section_key === 'career_guidance') {
     jsonFormat = `{
@@ -432,6 +446,20 @@ async function runSectionWriter(
     ? `## 워크넷 검증 직업 데이터 (${typeNumber}유형 적합 직무)\n한국고용정보원 워크넷 데이터 기반으로 검증된 직업 목록입니다.\n사용자의 전공·관심사에 맞게 이 목록에서 선별하여 추천하세요:\n${jobsList}\n\n---\n\n`
     : '';
 
+  // major_based_career_path: 워크넷 상위 직업의 Nemotron 직업 페르소나 주입 (RAG)
+  let personaBlock = '';
+  if (section.section_key === 'major_based_career_path' && typeNumber) {
+    const topJobNames = jobMapping
+      .filter(j => j.enneagram_fit[0]?.type === typeNumber && j.enneagram_fit[0]?.grade !== 'C')
+      .sort((a, b) => b.enneagram_fit[0].score - a.enneagram_fit[0].score)
+      .slice(0, 6)
+      .map(j => j.job_name);
+    const personaText = getPersonasForJobs(topJobNames);
+    if (personaText) {
+      personaBlock = `## 직업 페르소나 데이터 (Nemotron-Personas-Korea)\n실제 해당 직업에 종사하는 사람들의 구체적인 특성을 담은 페르소나 데이터입니다.\n이 내용을 참고하여 connection 필드를 작성하세요:\n${personaText}\n\n---\n\n`;
+    }
+  }
+
   const userMsg = `## 사용자 컨텍스트
 ${adminContext}
 
@@ -442,7 +470,7 @@ ${typeContext}
 
 ---
 
-${jobDataBlock}${webSearchBlock}## 작성 요구사항: ${section.title}
+${jobDataBlock}${personaBlock}${webSearchBlock}## 작성 요구사항: ${section.title}
 ${sectionPrompt}
 
 ---

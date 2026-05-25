@@ -86,6 +86,16 @@ function JobRecommendationSection({ data }: { data: JobRecommendation }) {
           </div>
         </div>
       )}
+      {data.connection && (
+        <div style={{
+          backgroundColor: '#F0FDF4', borderLeft: '4px solid #34D399',
+          borderRadius: '0 10px 10px 0', padding: '16px 20px',
+          fontSize: '14px', color: '#065F46', lineHeight: 1.8,
+        }} className="[&_strong]:font-semibold [&_p]:m-0">
+          <div style={{ fontSize: '12px', fontWeight: 600, color: '#059669', marginBottom: '8px' }}>이 직무에서 당신이 빛나는 이유</div>
+          <ReactMarkdown components={mdInline}>{data.connection}</ReactMarkdown>
+        </div>
+      )}
       {(data.strength || data.caution) && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
           {data.strength && (
