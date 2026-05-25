@@ -119,9 +119,9 @@ function JobRecommendationSection({ data }: { data: JobRecommendation }) {
                 </div>
                 {job.fit_badge && (
                   <span style={{
-                    display: 'inline-block', fontSize: '12px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px',
                     color: '#4338CA', backgroundColor: '#E0E7FF',
-                    borderRadius: '999px', padding: '3px 12px',
+                    borderRadius: '999px', padding: '3px 12px', lineHeight: 1,
                   }}>
                     {stripMd(job.fit_badge)}
                   </span>
@@ -226,6 +226,7 @@ function SkillCardsSection({ skills }: { skills: SkillCard[] }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <span style={{ fontSize: '12px', color: '#94A3B8', width: '28px', flexShrink: 0 }}>목표</span>
                 <span style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
                   fontSize: '12px', fontWeight: 500,
                   backgroundColor: levelStyle.bg, color: levelStyle.color,
                   padding: '2px 10px', borderRadius: '999px',
@@ -293,7 +294,7 @@ function EnneagramTypeCard({ typeNumber, cardStyle, characteristicsText }: { typ
                 <span
                   key={kw}
                   className={`text-xs px-2 rounded-full ${ts.tag}`}
-                  style={{ display: 'flex', alignItems: 'center', lineHeight: 1, height: '22px' }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, height: '22px' }}
                 >
                   {kw}
                 </span>
@@ -321,7 +322,7 @@ function EnneagramTypeCard({ typeNumber, cardStyle, characteristicsText }: { typ
                       <span
                         key={kw}
                         className={`text-xs px-1.5 rounded ${ws.tag}`}
-                        style={{ display: 'flex', alignItems: 'center', lineHeight: 1, height: '20px' }}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, height: '20px' }}
                       >
                         {kw}
                       </span>
@@ -432,6 +433,10 @@ function ReportContent() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* 모바일 전용 가로 화면 안내 배너 */}
+      <div className="block md:hidden rounded-lg px-4 py-2.5 text-sm text-amber-700 bg-amber-50 border border-amber-200">
+        가로 화면으로 보시면 더 편하게 읽을 수 있어요 📱
+      </div>
       <button className="btn btn-outline w-fit" onClick={() => router.back()}>← 홈</button>
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">결과 리포트</h2>
