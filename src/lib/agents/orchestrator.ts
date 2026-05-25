@@ -263,6 +263,23 @@ async function searchCareerData(
   return parts.join('\n\n');
 }
 
+async function searchJobData(
+  tavilyKey: string,
+  typeName: string,
+  typeKeywords: string[],
+): Promise<string> {
+  const keywordStr = typeKeywords.slice(0, 3).join(', ');
+  const [jobTrendResult, hiringResult] = await Promise.all([
+    searchTavily(tavilyKey, `에니어그램 ${typeName} 유형 추천 직업 직무 커리어 진로`),
+    searchTavily(tavilyKey, `${keywordStr} 성향 적합 직업 취업 채용 트렌드 2024 2025`),
+  ]);
+
+  const parts: string[] = [];
+  if (jobTrendResult) parts.push(`### 에니어그램 유형별 추천 직업 검색 결과\n${jobTrendResult}`);
+  if (hiringResult) parts.push(`### 관련 직무 채용 트렌드 검색 결과\n${hiringResult}`);
+  return parts.join('\n\n');
+}
+
 // ── 1단계: 유형 분류 에이전트 ────────────────────────────────────────────────
 
 async function runTypeClassifier(
@@ -345,10 +362,15 @@ async function runSectionWriter(
   typeData?: { name: string; keywords: string[] },
   typeNumber?: number
 ): Promise<ReportSection> {
-  // career_guidance: Tavily로 실시간 채용 데이터 검색
+  // career_guidance / major_based_career_path: Tavily로 실시간 채용 데이터 검색
   let webSearchContext = '';
+  let webSearchLabel = '실시간 채용 시장 검색 결과';
   if (section.section_key === 'career_guidance' && tavilyKey && typeData) {
     webSearchContext = await searchCareerData(tavilyKey, typeData.name, typeData.keywords, formattedPre);
+    webSearchLabel = '실시간 채용 시장 검색 결과';
+  } else if (section.section_key === 'major_based_career_path' && tavilyKey && typeData) {
+    webSearchContext = await searchJobData(tavilyKey, typeData.name, typeData.keywords);
+    webSearchLabel = '실시간 직업·진로 검색 결과';
   }
 
   const subKeys = section.sub_keys ?? [];
@@ -399,7 +421,7 @@ async function runSectionWriter(
   }
 
   const webSearchBlock = webSearchContext
-    ? `## 실시간 채용 시장 검색 결과 (Tavily)\n${webSearchContext}\n\n---\n\n`
+    ? `## ${webSearchLabel} (Tavily)\n${webSearchContext}\n\n---\n\n`
     : '';
 
   // major_based_career_path: 워크넷 검증 직업 목록 주입 (RAG)

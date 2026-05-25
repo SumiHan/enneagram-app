@@ -1,0 +1,378 @@
+"use client";
+import React from "react";
+import ReactMarkdown from "react-markdown";
+import { TYPES, TRIAD_STYLE, TRIADS } from "@/lib/enneagram-data";
+import type { SkillCard, JobRecommendation } from "@/lib/openai";
+
+export type ReportSection = {
+  key: string;
+  title: string;
+  content: string | Record<string, string>;
+  sub_keys?: { key: string; label: string }[];
+  show_as_card?: boolean;
+};
+
+// ── 유틸 ──────────────────────────────────────────────────────────────────────
+
+export function parseTypeNumber(content: string): number | null {
+  const numMatch = content.match(/(\d+)/);
+  if (numMatch) {
+    const n = parseInt(numMatch[1], 10);
+    if (n >= 1 && n <= 9) return n;
+  }
+  const found = TYPES.find(t => content.includes(t.name) || content.includes(t.subtitle));
+  return found?.number ?? null;
+}
+
+function stripMd(text: string): string {
+  return text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1');
+}
+
+const mdInline = { p: ({ children }: any) => <span>{children}</span> };
+
+// ── 내부 컴포넌트 ──────────────────────────────────────────────────────────────
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="absolute top-0 left-4 px-3 text-base font-semibold z-10 text-white"
+      style={{ backgroundColor: '#4F46E5', borderRadius: '6px', display: 'flex', alignItems: 'center', height: '28px', lineHeight: 1 }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function JobRecommendationSection({ data }: { data: JobRecommendation }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {data.summary && (
+        <div style={{
+          backgroundColor: '#EEF2FF', borderLeft: '4px solid #818CF8',
+          borderRadius: '0 10px 10px 0', padding: '16px 20px',
+          fontSize: '14px', color: '#4338CA', lineHeight: 1.8,
+        }} className="[&_strong]:font-semibold [&_p]:m-0">
+          <ReactMarkdown components={mdInline}>{data.summary}</ReactMarkdown>
+        </div>
+      )}
+      {data.jobs?.length > 0 && (
+        <div>
+          <div style={{ fontSize: '12px', color: '#9CA3AF', marginBottom: '10px', fontWeight: 500 }}>추천 직무</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+            {data.jobs.map((job, i) => (
+              <div key={i} style={{ backgroundColor: '#fff', border: '1.5px solid #C7D2FE', borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ fontSize: '12px', color: '#818CF8', fontWeight: 700, marginBottom: '6px', letterSpacing: '0.05em' }}>
+                  {String(i + 1).padStart(2, '0')}
+                </div>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: '#111827', marginBottom: '8px' }}>
+                  {stripMd(job.name)}
+                </div>
+                <div style={{ fontSize: '13px', color: '#6B7280', lineHeight: 1.6, marginBottom: '14px' }}
+                  className="[&_strong]:font-semibold [&_p]:m-0">
+                  <ReactMarkdown components={mdInline}>{job.description}</ReactMarkdown>
+                </div>
+                {job.fit_badge && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px',
+                    color: '#4338CA', backgroundColor: '#E0E7FF',
+                    borderRadius: '999px', padding: '3px 12px', lineHeight: 1, width: 'fit-content',
+                    marginTop: 'auto',
+                  }}>
+                    {stripMd(job.fit_badge)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {(data.strength || data.caution) && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
+          {data.strength && (
+            <div style={{ backgroundColor: '#fff', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '18px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: '#059669', marginBottom: '10px' }}>◆ 이 유형의 강점</div>
+              <div style={{ fontSize: '13px', color: '#374151', lineHeight: 1.7 }} className="[&_strong]:font-semibold [&_p]:m-0">
+                <ReactMarkdown components={mdInline}>{data.strength}</ReactMarkdown>
+              </div>
+            </div>
+          )}
+          {data.caution && (
+            <div style={{ backgroundColor: '#fff', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '18px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: '#D97706', marginBottom: '10px' }}>△ 주의할 점</div>
+              <div style={{ fontSize: '13px', color: '#374151', lineHeight: 1.7 }} className="[&_strong]:font-semibold [&_p]:m-0">
+                <ReactMarkdown components={mdInline}>{data.caution}</ReactMarkdown>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const CARD_ACCENT_COLORS = [
+  { bg: '#EFF6FF', icon: '#DBEAFE' },
+  { bg: '#F5F3FF', icon: '#EDE9FE' },
+  { bg: '#FDF2F8', icon: '#FCE7F3' },
+  { bg: '#F0FDF4', icon: '#DCFCE7' },
+  { bg: '#FFFBEB', icon: '#FEF3C7' },
+  { bg: '#FFF7ED', icon: '#FFEDD5' },
+];
+
+function getLevelStyle(level: string): { bg: string; color: string } {
+  if (level.includes('실무 활용')) return { bg: '#CCFBF1', color: '#0F766E' };
+  if (level.includes('입문') || level.includes('→')) return { bg: '#E0E7FF', color: '#4338CA' };
+  if (level.includes('심화')) return { bg: '#FEE2E2', color: '#B91C1C' };
+  return { bg: '#F1F5F9', color: '#475569' };
+}
+
+function SkillCardsSection({ skills }: { skills: SkillCard[] }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+      {skills.map((skill, i) => {
+        const accent = CARD_ACCENT_COLORS[i % CARD_ACCENT_COLORS.length];
+        const levelStyle = getLevelStyle(skill.level);
+        return (
+          <div key={i} style={{ backgroundColor: '#fff', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+              <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: accent.icon, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0 }}>
+                {skill.icon}
+              </div>
+              <span style={{ fontSize: '15px', fontWeight: 600, color: '#1E293B' }}>{stripMd(skill.name)}</span>
+            </div>
+            <div style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.6, marginBottom: '16px' }} className="[&_strong]:font-semibold [&_p]:m-0">
+              <ReactMarkdown components={mdInline}>{skill.description}</ReactMarkdown>
+            </div>
+            <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <span style={{ fontSize: '12px', color: '#94A3B8', width: '28px', flexShrink: 0, paddingTop: '2px' }}>강의</span>
+                {skill.course_url ? (
+                  <a href={skill.course_url} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: '13px', color: '#4F46E5', textDecoration: 'underline', textUnderlineOffset: '2px', wordBreak: 'break-all' }}>
+                    {skill.course}
+                  </a>
+                ) : (
+                  <span style={{ fontSize: '13px', color: '#334155' }}>{skill.course}</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '12px', color: '#94A3B8', width: '28px', flexShrink: 0 }}>목표</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, fontSize: '12px', fontWeight: 500, backgroundColor: levelStyle.bg, color: levelStyle.color, padding: '2px 10px', borderRadius: '999px' }}>
+                  {skill.level}
+                </span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function EnneagramTypeCard({ typeNumber, cardStyle, characteristicsText }: {
+  typeNumber: number;
+  cardStyle: { bg: string; border: string };
+  characteristicsText?: string;
+}) {
+  const current = TYPES.find(t => t.number === typeNumber)!;
+  const ts = TRIAD_STYLE[current.triad];
+  const triad = TRIADS.find(tr => tr.key === current.triad)!;
+  const wingTypes = current.wings.map(w => TYPES.find(t => t.number === w)!);
+  const growthType = TYPES.find(t => t.number === current.growth)!;
+  const stressType = TYPES.find(t => t.number === current.stress)!;
+
+  return (
+    <div className="relative mt-10" style={{ paddingTop: '14px' }}>
+      <SectionLabel>1. 에니어그램 유형</SectionLabel>
+      <div className="p-5 pt-7 rounded-lg border" style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }}>
+        <div className="flex items-baseline gap-1.5 flex-wrap mb-4">
+          <span className="text-3xl font-bold text-slate-800">{current.number}</span>
+          <span className="text-lg font-semibold text-slate-800">{current.name}</span>
+          <span className="text-slate-300">·</span>
+          <span className="text-sm text-slate-400">{current.subtitle}</span>
+        </div>
+        <div className="flex gap-4 mb-4 items-stretch">
+          <div className="w-[110px] sm:w-[180px] shrink-0">
+            <img src={`/images/${current.number}_${current.name}.png`} alt={current.name} className="w-full h-full rounded-lg object-contain" />
+          </div>
+          <div className="flex-1 flex flex-col gap-2">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', lineHeight: 1 }}>
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: ts.nodeActive }} />
+              <span className="text-xs font-medium" style={{ color: ts.textColor, lineHeight: 1 }}>{triad.name}</span>
+            </div>
+            <div className="bg-white rounded-lg border border-slate-200 p-3">
+              <div className="text-xs text-slate-400 mb-0.5">핵심 욕구</div>
+              <div className="text-sm text-slate-700">{current.coreDesire}</div>
+            </div>
+            <div className="bg-white rounded-lg border border-slate-200 p-3">
+              <div className="text-xs text-slate-400 mb-0.5">핵심 두려움</div>
+              <div className="text-sm text-slate-700">{current.coreFear}</div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {current.keywords.map(kw => (
+                <span key={kw} className={`text-xs px-2 rounded-full ${ts.tag}`}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, height: '22px' }}>
+                  {kw}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="mb-4">
+          <div className="text-xs font-medium mb-2" style={{ color: '#818CF8' }}>날개 (Wings)</div>
+          <div className="grid grid-cols-2 gap-2">
+            {wingTypes.map(w => {
+              const ws = TRIAD_STYLE[w.triad];
+              return (
+                <div key={w.number} className="bg-white rounded-lg border border-slate-200 p-3">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', lineHeight: 1 }}>
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: ws.nodeActive }} />
+                    <span className="text-xs text-slate-400" style={{ lineHeight: 1 }}>{current.number}w{w.number}</span>
+                  </div>
+                  <div className="text-sm font-semibold text-slate-800">{w.number}. {w.name}</div>
+                  <div className="text-xs text-slate-400 mt-0.5">{w.subtitle}</div>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {w.keywords.slice(0, 3).map(kw => (
+                      <span key={kw} className={`text-xs px-1.5 rounded ${ws.tag}`}
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, height: '20px' }}>
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs font-medium mb-2" style={{ color: '#818CF8' }}>성장 &amp; 스트레스 방향</div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-white rounded-lg border border-slate-200 p-3">
+              <div className="text-xs font-medium text-green-600 mb-1">성장 방향</div>
+              <div className="text-sm font-semibold text-slate-800">{growthType.number}. {growthType.name}</div>
+              <div className="text-xs text-slate-400 mt-0.5">{growthType.subtitle}</div>
+              <div className="text-xs text-slate-500 mt-1.5 leading-snug">건강할 때 이 유형의 장점을 흡수해요</div>
+            </div>
+            <div className="bg-white rounded-lg border border-slate-200 p-3">
+              <div className="text-xs font-medium text-orange-500 mb-1">스트레스 방향</div>
+              <div className="text-sm font-semibold text-slate-800">{stressType.number}. {stressType.name}</div>
+              <div className="text-xs text-slate-400 mt-0.5">{stressType.subtitle}</div>
+              <div className="text-xs text-slate-500 mt-1.5 leading-snug">힘들 때 이 유형의 단점이 나타나요</div>
+            </div>
+          </div>
+        </div>
+        {characteristicsText && (
+          <div className="mt-4">
+            <div className="text-xs font-medium mb-2" style={{ color: '#818CF8' }}>나에 대한 이야기</div>
+            <div className="bg-white rounded-lg border border-slate-200 p-3">
+              <div className="text-sm leading-[1.8] text-slate-600 [&_strong]:font-semibold [&_p]:m-0">
+                <ReactMarkdown components={mdInline}>{characteristicsText}</ReactMarkdown>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── 공용 ReportViewer ─────────────────────────────────────────────────────────
+
+const CARD_STYLE = { bg: '#F8F9FA', border: '#E5E7EB' };
+
+export function ReportViewer({ reportData, generatedAt }: { reportData: ReportSection[]; generatedAt?: string }) {
+  let visibleIdx = 0;
+
+  return (
+    <div className="space-y-2">
+      {reportData.map(section => {
+        if (section.show_as_card === false) return null;
+        const idx = visibleIdx++;
+
+        if (section.key === 'enneagram_type') {
+          const typeNumber = parseTypeNumber(typeof section.content === 'string' ? section.content : JSON.stringify(section.content));
+          if (typeNumber) {
+            const charSection = reportData.find(s => s.key === 'characteristics');
+            const charText = typeof charSection?.content === 'string'
+              ? charSection.content
+              : charSection?.content && typeof charSection.content === 'object'
+                ? Object.values(charSection.content as Record<string, string>).join('\n\n')
+                : undefined;
+            return <EnneagramTypeCard key={section.key} typeNumber={typeNumber} cardStyle={CARD_STYLE} characteristicsText={charText} />;
+          }
+        }
+
+        if (section.key === 'major_based_career_path') {
+          const jobData = section.content as any;
+          if (jobData && typeof jobData === 'object' && (jobData.jobs || jobData.summary)) {
+            return (
+              <div key={section.key} className="relative mt-10" style={{ paddingTop: '14px' }}>
+                <SectionLabel>{idx + 1}. {section.title}</SectionLabel>
+                <div className="p-5 pt-7 rounded-lg border" style={{ backgroundColor: CARD_STYLE.bg, borderColor: CARD_STYLE.border }}>
+                  <JobRecommendationSection data={jobData as JobRecommendation} />
+                </div>
+              </div>
+            );
+          }
+        }
+
+        if (section.key === 'career_guidance') {
+          const content = section.content as any;
+          const skills = content?.skills;
+          const skillSummary = content?.skill_summary;
+          if (Array.isArray(skills) && skills.length > 0) {
+            return (
+              <div key={section.key} className="relative mt-10" style={{ paddingTop: '14px' }}>
+                <SectionLabel>{idx + 1}. {section.title}</SectionLabel>
+                <div className="p-5 pt-7 rounded-lg border" style={{ backgroundColor: CARD_STYLE.bg, borderColor: CARD_STYLE.border }}>
+                  {skillSummary && (
+                    <div style={{ backgroundColor: '#EEF2FF', borderLeft: '4px solid #818CF8', borderRadius: '0 10px 10px 0', padding: '16px 20px', fontSize: '14px', color: '#4338CA', lineHeight: 1.8, marginBottom: '20px' }}
+                      className="[&_strong]:font-semibold [&_p]:m-0">
+                      <ReactMarkdown components={mdInline}>{skillSummary}</ReactMarkdown>
+                    </div>
+                  )}
+                  <SkillCardsSection skills={skills} />
+                </div>
+              </div>
+            );
+          }
+        }
+
+        const isNested = section.content !== null && typeof section.content === 'object';
+        const subKeys = section.sub_keys ?? (isNested ? Object.keys(section.content as Record<string, string>).map(k => ({ key: k, label: k })) : []);
+
+        return (
+          <div key={section.key} className="relative mt-10" style={{ paddingTop: '14px' }}>
+            <SectionLabel>{idx + 1}. {section.title}</SectionLabel>
+            <div className="p-5 pt-7 rounded-lg border" style={{ backgroundColor: CARD_STYLE.bg, borderColor: CARD_STYLE.border }}>
+              {isNested ? (
+                <div className="space-y-4">
+                  {subKeys.map(sk => {
+                    const val = (section.content as Record<string, string>)[sk.key] ?? '';
+                    return (
+                      <div key={sk.key}>
+                        <div className="text-xs font-semibold text-indigo-500 mb-1">{sk.label}</div>
+                        <div className="leading-[1.7] text-[14px] [&_strong]:font-semibold [&_em]:italic [&_p]:mb-2 [&_p:last-child]:mb-0" style={{ color: '#6B7280' }}>
+                          <ReactMarkdown>{val}</ReactMarkdown>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="leading-[1.7] text-[14px] [&_strong]:font-semibold [&_em]:italic [&_p]:mb-2 [&_p:last-child]:mb-0" style={{ color: '#6B7280' }}>
+                  <ReactMarkdown>{section.content as string}</ReactMarkdown>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {generatedAt && (
+        <div className="text-xs text-slate-400 text-right pt-2 border-t mt-8">
+          생성일: {new Date(generatedAt).toLocaleString('ko-KR')}
+        </div>
+      )}
+    </div>
+  );
+}

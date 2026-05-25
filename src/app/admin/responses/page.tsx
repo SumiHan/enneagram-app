@@ -8,106 +8,7 @@ import { getPreQuestionsFromStorage, getMainQuestionsFromStorage } from "@/lib/d
 import type { SurveyAnswer, QuestionItem } from "@/lib/types";
 import { SurveyStatusCell } from "@/components/SurveyStatusCell";
 import * as XLSX from 'xlsx';
-import { TYPES, TRIAD_STYLE, TRIADS } from "@/lib/enneagram-data";
-
-function parseTypeNumber(content: string): number | null {
-  const numMatch = content.match(/(\d+)/);
-  if (numMatch) {
-    const n = parseInt(numMatch[1], 10);
-    if (n >= 1 && n <= 9) return n;
-  }
-  const found = TYPES.find(t => content.includes(t.name) || content.includes(t.subtitle));
-  return found?.number ?? null;
-}
-
-const CARD_STYLE = { bg: '#F8F9FA', border: '#E5E7EB' };
-
-function EnneagramTypeCard({ typeNumber }: { typeNumber: number }) {
-  const current = TYPES.find(t => t.number === typeNumber)!;
-  const ts = TRIAD_STYLE[current.triad];
-  const triad = TRIADS.find(tr => tr.key === current.triad)!;
-  const wingTypes = current.wings.map(w => TYPES.find(t => t.number === w)!);
-  const growthType = TYPES.find(t => t.number === current.growth)!;
-  const stressType = TYPES.find(t => t.number === current.stress)!;
-
-  return (
-    <div className="relative mt-5">
-      <div className="absolute -top-3.5 left-4 px-3 py-0.5 text-base font-semibold z-10 text-white" style={{ backgroundColor: '#4F46E5', borderRadius: '6px' }}>1. 에니어그램 유형</div>
-      <div className="p-5 pt-7 rounded-lg border" style={{ backgroundColor: CARD_STYLE.bg, borderColor: CARD_STYLE.border }}>
-        <div className="flex items-baseline gap-1.5 flex-wrap mb-4">
-          <span className="text-3xl font-bold text-slate-800">{current.number}</span>
-          <span className="text-lg font-semibold text-slate-800">{current.name}</span>
-          <span className="text-slate-300">·</span>
-          <span className="text-sm text-slate-400">{current.subtitle}</span>
-        </div>
-        <div className="flex gap-4 mb-4 items-stretch">
-          <div className="sm:w-[180px] shrink-0">
-            <img src={`/images/${current.number}_${current.name}.png`} alt={current.name} className="w-full h-full rounded-lg object-contain" />
-          </div>
-          <div className="flex-1 flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ts.nodeActive }} />
-              <span className="text-xs font-medium" style={{ color: ts.textColor }}>{triad.name}</span>
-            </div>
-            <div className="bg-white rounded-lg border border-slate-200 p-3">
-              <div className="text-xs text-slate-400 mb-0.5">핵심 욕구</div>
-              <div className="text-sm text-slate-700">{current.coreDesire}</div>
-            </div>
-            <div className="bg-white rounded-lg border border-slate-200 p-3">
-              <div className="text-xs text-slate-400 mb-0.5">핵심 두려움</div>
-              <div className="text-sm text-slate-700">{current.coreFear}</div>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {current.keywords.map(kw => (
-                <span key={kw} className={`text-xs px-2 py-1 rounded-full ${ts.tag}`}>{kw}</span>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="mb-4">
-          <div className="text-xs font-medium mb-2" style={{ color: '#818CF8' }}>날개 (Wings)</div>
-          <div className="grid grid-cols-2 gap-2">
-            {wingTypes.map(w => {
-              const ws = TRIAD_STYLE[w.triad];
-              return (
-                <div key={w.number} className="bg-white rounded-lg border border-slate-200 p-3">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ws.nodeActive }} />
-                    <span className="text-xs text-slate-400">{current.number}w{w.number}</span>
-                  </div>
-                  <div className="text-sm font-semibold text-slate-800">{w.number}. {w.name}</div>
-                  <div className="text-xs text-slate-400 mt-0.5">{w.subtitle}</div>
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {w.keywords.slice(0, 3).map(kw => (
-                      <span key={kw} className={`text-xs px-1.5 py-0.5 rounded ${ws.tag}`}>{kw}</span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        <div>
-          <div className="text-xs font-medium mb-2" style={{ color: '#818CF8' }}>성장 &amp; 스트레스 방향</div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-white rounded-lg border border-slate-200 p-3">
-              <div className="text-xs font-medium text-green-600 mb-1">성장 방향</div>
-              <div className="text-sm font-semibold text-slate-800">{growthType.number}. {growthType.name}</div>
-              <div className="text-xs text-slate-400 mt-0.5">{growthType.subtitle}</div>
-              <div className="text-xs text-slate-500 mt-1.5 leading-snug">건강할 때 이 유형의 장점을 흡수해요</div>
-            </div>
-            <div className="bg-white rounded-lg border border-slate-200 p-3">
-              <div className="text-xs font-medium text-orange-500 mb-1">스트레스 방향</div>
-              <div className="text-sm font-semibold text-slate-800">{stressType.number}. {stressType.name}</div>
-              <div className="text-xs text-slate-400 mt-0.5">{stressType.subtitle}</div>
-              <div className="text-xs text-slate-500 mt-1.5 leading-snug">힘들 때 이 유형의 단점이 나타나요</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+import { ReportViewer } from "@/components/ReportViewer";
 
 type UserRecord = {
   userId: string;
@@ -120,6 +21,15 @@ type UserRecord = {
   mainAnsweredCount: number;
   mainTotalCount: number;
   reportStatus: string;
+  interviewStatus: 'COMPLETED' | 'NOT_STARTED';
+  interviewQ1: number | null;
+  interviewAllData: {
+    q1: number | null;
+    q2: string | null;
+    q3: string | null;
+    q4: string[];
+    q5: string | null;
+  } | null;
   preAnswers: SurveyAnswer[];
   mainAnswers: SurveyAnswer[];
   reportData: any;
@@ -138,9 +48,10 @@ export default function AdminResponsesPage() {
   const [preQuestions, setPreQuestions] = useState<QuestionItem[]>(cachedPreQuestions ?? []);
   const [mainQuestions, setMainQuestions] = useState<QuestionItem[]>(cachedMainQuestions ?? []);
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<'pre' | 'main' | 'report'>('pre');
+  const [activeTab, setActiveTab] = useState<'pre' | 'main' | 'report' | 'interview'>('pre');
   const [loading, setLoading] = useState(cachedRecords === null);
   const [currentReportData, setCurrentReportData] = useState<any>(null);
+  const [currentInterviewData, setCurrentInterviewData] = useState<any>(null);
   const [emailSearch, setEmailSearch] = useState('');
 
   useEffect(() => {
@@ -195,9 +106,32 @@ export default function AdminResponsesPage() {
         .eq('role', 'user'); // Only load users with role='user'
       
       if (usersError) throw usersError;
-      
+
+      // 인터뷰 응답 배치 조회 — user_id별 최신 1건 기준 (쿼리 1회)
+      const allUserIds = (usersData || []).map(u => u.id);
+      const { data: interviewData } = allUserIds.length > 0
+        ? await supabase
+            .from('interview_responses')
+            .select('user_id, q1_accuracy, q2_job_resonance, q3_career_concern, q4_job_criteria, q5_feedback, created_at')
+            .in('user_id', allUserIds)
+            .order('created_at', { ascending: false })
+        : { data: [] };
+      // user_id 기준 최신 행만 유지
+      const interviewMap: Record<string, { q1: number | null; q2: string | null; q3: string | null; q4: string[]; q5: string | null }> = {};
+      for (const row of (interviewData ?? []) as any[]) {
+        if (!interviewMap[row.user_id]) {
+          interviewMap[row.user_id] = {
+            q1: row.q1_accuracy,
+            q2: row.q2_job_resonance ?? null,
+            q3: row.q3_career_concern ?? null,
+            q4: row.q4_job_criteria ?? [],
+            q5: row.q5_feedback ?? null,
+          };
+        }
+      }
+
       const userRecords: UserRecord[] = [];
-      
+
       for (const userData of usersData || []) {
         
         // Load responses from responses table
@@ -272,6 +206,9 @@ export default function AdminResponsesPage() {
           mainAnsweredCount: mainAnsweredCount,
           mainTotalCount: mainTotalCount,
           reportStatus: reportStatus,
+          interviewStatus: interviewMap[userData.id] ? 'COMPLETED' : 'NOT_STARTED',
+          interviewQ1: interviewMap[userData.id]?.q1 ?? null,
+          interviewAllData: interviewMap[userData.id] ?? null,
           preAnswers: preResponseData?.answers ? Object.entries(preResponseData.answers).map(([qId, value]) => ({
             q_id: qId,
             value: Number(value),
@@ -398,6 +335,44 @@ export default function AdminResponsesPage() {
     }
   };
 
+  const Q4_LABELS: Record<string, string> = {
+    fit: '내 성격·강점과의 적합성',
+    salary: '연봉·안정성',
+    growth: '성장 가능성·커리어 전망',
+    meaning: '일의 의미·가치',
+    balance: '워라밸',
+    expectation: '주변의 기대',
+  };
+
+  const stripMd = (text: string) => text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1');
+
+  const extractReportFields = (reportData: any) => {
+    if (!reportData || !Array.isArray(reportData.report_data)) {
+      return { enneagramType: '', job1: '', job2: '', job3: '', careerKeywords: '' };
+    }
+    const sections = reportData.report_data;
+
+    const typeSection = sections.find((s: any) => s.key === 'enneagram_type');
+    let enneagramType = '';
+    if (typeSection) {
+      const c = typeof typeSection.content === 'string' ? typeSection.content : JSON.stringify(typeSection.content);
+      const m = c.match(/(\d+)/);
+      if (m) enneagramType = `${m[1]}유형`;
+    }
+
+    const careerSection = sections.find((s: any) => s.key === 'major_based_career_path');
+    const jobs: any[] = careerSection?.content?.jobs ?? [];
+    const job1 = jobs[0] ? stripMd(jobs[0].name ?? '') : '';
+    const job2 = jobs[1] ? stripMd(jobs[1].name ?? '') : '';
+    const job3 = jobs[2] ? stripMd(jobs[2].name ?? '') : '';
+
+    const guidanceSection = sections.find((s: any) => s.key === 'career_guidance');
+    const skills: any[] = guidanceSection?.content?.skills ?? [];
+    const careerKeywords = skills.map((s: any) => stripMd(s.name ?? '')).filter(Boolean).join(', ');
+
+    return { enneagramType, job1, job2, job3, careerKeywords };
+  };
+
   const downloadExcel = () => {
     if (selectedUsers.size === 0) {
       alert('다운로드할 사용자를 선택하세요.');
@@ -406,70 +381,61 @@ export default function AdminResponsesPage() {
 
     const selectedRecords = records.filter(r => selectedUsers.has(r.userId));
 
-    // Pre-survey sheet - with question text in headers
+    // 사전 설문 시트
     const preHeaders = ['이메일', ...preQuestions.map(q => `${q.id}_${q.text}`)];
     const preRows = selectedRecords.map(r => {
       const row: any = { '이메일': r.email };
       preQuestions.forEach(q => {
         const answer = r.preAnswers.find(a => a.q_id === q.id);
-        const columnName = `${q.id}_${q.text}`;
-        // Use getAnswerText to get the same display value as detail view
-        row[columnName] = answer ? getAnswerText(answer, preQuestions) : '';
+        row[`${q.id}_${q.text}`] = answer ? getAnswerText(answer, preQuestions) : '';
       });
       return row;
     });
 
-    // Main survey sheet - with question text in headers
+    // 본 설문 시트
     const mainHeaders = ['이메일', ...mainQuestions.map(q => `${q.id}_${q.text}`)];
     const mainRows = selectedRecords.map(r => {
       const row: any = { '이메일': r.email };
       mainQuestions.forEach(q => {
         const answer = r.mainAnswers.find(a => a.q_id === q.id);
-        const columnName = `${q.id}_${q.text}`;
-        // Use getAnswerText to get the same display value as detail view
-        row[columnName] = answer ? getAnswerText(answer, mainQuestions) : '';
+        row[`${q.id}_${q.text}`] = answer ? getAnswerText(answer, mainQuestions) : '';
       });
       return row;
     });
 
-    // Report sheet
-    const reportHeaders = ['이메일', '리포트 결과'];
+    // 리포트 시트
+    const reportHeaders = ['이메일', '에니어그램 유형', '추천 직무', '커리어 가이드 키워드'];
     const reportRows = selectedRecords.map(r => {
-      let reportText = '';
-      
-      if (r.reportData && r.reportData.enneagram_type) {
-        // Format report data into readable text
-        reportText = `유형: ${r.reportData.enneagram_type}\n\n`;
-        
-        if (r.reportData.characteristics) {
-          reportText += `특성:\n${r.reportData.characteristics}\n\n`;
-        }
-        
-        if (r.reportData.job_recommendations) {
-          reportText += `직업 추천:\n${r.reportData.job_recommendations}`;
-        }
-      } else {
-        reportText = '리포트 미생성';
-      }
-      
+      const { enneagramType, job1, job2, job3, careerKeywords } = extractReportFields(r.reportData);
       return {
         '이메일': r.email,
-        '리포트 결과': reportText
+        '에니어그램 유형': enneagramType || '미생성',
+        '추천 직무': [job1, job2, job3].filter(Boolean).join(', '),
+        '커리어 가이드 키워드': careerKeywords,
       };
     });
 
-    // Create workbook
-    const wb = XLSX.utils.book_new();
-    const preWs = XLSX.utils.json_to_sheet(preRows, { header: preHeaders });
-    const mainWs = XLSX.utils.json_to_sheet(mainRows, { header: mainHeaders });
-    const reportWs = XLSX.utils.json_to_sheet(reportRows, { header: reportHeaders });
-    
-    // Append sheets
-    XLSX.utils.book_append_sheet(wb, preWs, '사전 설문');
-    XLSX.utils.book_append_sheet(wb, mainWs, '본 설문');
-    XLSX.utils.book_append_sheet(wb, reportWs, '리포트');
+    // 인터뷰 시트
+    const interviewHeaders = ['이메일', 'Q1. 유형 일치도 (1~5)', 'Q2. 끌렸던 직업과 이유', 'Q3. 진로 고민', 'Q4. 직업 선택 기준', 'Q5. 솔직한 느낌'];
+    const interviewRows = selectedRecords.map(r => {
+      const d = r.interviewAllData;
+      return {
+        '이메일': r.email,
+        'Q1. 유형 일치도 (1~5)': d?.q1 ?? '',
+        'Q2. 끌렸던 직업과 이유': d?.q2 ?? '',
+        'Q3. 진로 고민': d?.q3 ?? '',
+        'Q4. 직업 선택 기준': d ? (d.q4 ?? []).map(id => Q4_LABELS[id] ?? id).join(', ') : '',
+        'Q5. 솔직한 느낌': d?.q5 ?? '',
+      };
+    });
 
-    // Download
+    // 워크북 생성
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(preRows, { header: preHeaders }), '사전 설문');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(mainRows, { header: mainHeaders }), '본 설문');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(reportRows, { header: reportHeaders }), '리포트');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(interviewRows, { header: interviewHeaders }), '인터뷰');
+
     XLSX.writeFile(wb, `응답_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
@@ -521,6 +487,7 @@ export default function AdminResponsesPage() {
               <th className="py-2 pr-4">사전 설문</th>
               <th className="py-2 pr-4">본 설문</th>
               <th className="py-2 pr-4">리포트</th>
+              <th className="py-2 pr-4">인터뷰</th>
               <th className="py-2 text-right">액션</th>
             </tr>
           </thead>
@@ -561,11 +528,24 @@ export default function AdminResponsesPage() {
                     </div>
                   </div>
                 </td>
+                <td className="py-2 pr-4">
+                  <div className="flex flex-col gap-1">
+                    <div className={`inline-flex items-center rounded-full px-3 h-7 text-sm font-semibold ${
+                      r.interviewStatus === 'COMPLETED' ? 'text-green-600 bg-green-50' : 'text-gray-500 bg-gray-100'
+                    }`}>
+                      {r.interviewStatus === 'COMPLETED' ? 'Completed' : 'Not Started'}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {r.interviewStatus === 'COMPLETED' ? '인터뷰 완료' : '대기 중'}
+                    </div>
+                  </div>
+                </td>
                 <td className="py-2 text-right">
                   <button
                     className="btn btn-outline text-sm"
                     onClick={() => {
                       setCurrentReportData(r.reportData);
+                      setCurrentInterviewData(null);
                       setActiveTab('pre');
                       setSelectedUser(r.userId);
                     }}
@@ -577,7 +557,7 @@ export default function AdminResponsesPage() {
             ))}
             {records.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-6 text-center text-slate-500">
+                <td colSpan={7} className="py-6 text-center text-slate-500">
                   등록된 사용자가 없습니다.
                 </td>
               </tr>
@@ -615,6 +595,24 @@ export default function AdminResponsesPage() {
                   onClick={() => setActiveTab('report')}
                 >
                   리포트
+                </button>
+                <button
+                  className={`px-4 py-2 rounded ${activeTab === 'interview' ? 'bg-blue-500 text-white' : 'bg-slate-100'}`}
+                  onClick={async () => {
+                    setActiveTab('interview');
+                    if (!currentInterviewData && selectedUser) {
+                      const { data } = await supabase
+                        .from('interview_responses')
+                        .select('*')
+                        .eq('user_id', selectedUser)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+                      setCurrentInterviewData(data ?? null);
+                    }
+                  }}
+                >
+                  인터뷰
                 </button>
               </div>
             </div>
@@ -705,33 +703,10 @@ export default function AdminResponsesPage() {
                             <h3 className="text-lg font-semibold">리포트 상세</h3>
                             {refreshBtn}
                           </div>
-                          <div className="space-y-8">
-                            {currentReportData.report_data.map((section: { key: string; title: string; content: string }, idx: number) => {
-                              if (section.key === 'enneagram_type') {
-                                const typeNumber = parseTypeNumber(section.content);
-                                if (typeNumber) {
-                                  return <EnneagramTypeCard key={section.key} typeNumber={typeNumber} />;
-                                }
-                              }
-                              return (
-                                <div key={section.key} className="relative mt-5">
-                                  <div className="absolute -top-3.5 left-4 px-3 py-0.5 text-base font-semibold z-10 text-white" style={{ backgroundColor: '#4F46E5', borderRadius: '6px' }}>
-                                    {idx + 1}. {section.title}
-                                  </div>
-                                  <div className="p-5 pt-7 rounded-lg border" style={{ backgroundColor: CARD_STYLE.bg, borderColor: CARD_STYLE.border }}>
-                                    <div className="leading-[1.7] text-[14px] [&_strong]:font-semibold [&_em]:italic [&_p]:mb-2 [&_p:last-child]:mb-0" style={{ color: '#6B7280' }}>
-                                      <ReactMarkdown>{typeof section.content === 'string' ? section.content : JSON.stringify(section.content)}</ReactMarkdown>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                            {currentReportData.generated_at && (
-                              <div className="text-xs text-slate-400 text-right pt-2 border-t">
-                                생성일: {new Date(currentReportData.generated_at).toLocaleString('ko-KR')}
-                              </div>
-                            )}
-                          </div>
+                          <ReportViewer
+                            reportData={currentReportData.report_data}
+                            generatedAt={currentReportData.generated_at}
+                          />
                         </>
                       );
                     }
@@ -787,6 +762,41 @@ export default function AdminResponsesPage() {
                       </div>
                     );
                   })()}
+                </div>
+              )}
+
+              {activeTab === 'interview' && (
+                <div className="space-y-4">
+                  {currentInterviewData ? (
+                    <>
+                      {[
+                        { label: 'Q1. 에니어그램 유형 일치도', value: `${currentInterviewData.q1_accuracy}점 / 5점` },
+                        { label: 'Q2. 가장 끌렸던 직업과 이유', value: currentInterviewData.q2_job_resonance },
+                        { label: 'Q3. 진로 관련 가장 큰 고민', value: currentInterviewData.q3_career_concern },
+                        {
+                          label: 'Q4. 직업 선택 기준',
+                          value: (currentInterviewData.q4_job_criteria ?? []).map((id: string) => ({
+                            fit: '내 성격·강점과의 적합성', salary: '연봉·안정성',
+                            growth: '성장 가능성·커리어 전망', meaning: '일의 의미·가치',
+                            balance: '워라밸', expectation: '주변의 기대',
+                          }[id] ?? id)).join(', ') || '—',
+                        },
+                        { label: 'Q5. 솔직한 느낌', value: currentInterviewData.q5_feedback },
+                      ].map(({ label, value }) => (
+                        <div key={label} className="card p-4">
+                          <div className="text-xs font-medium text-slate-400 mb-1">{label}</div>
+                          <div className="text-sm text-slate-700 leading-relaxed">
+                            {value || <span className="text-slate-300 italic">응답 없음</span>}
+                          </div>
+                        </div>
+                      ))}
+                      <div className="text-xs text-slate-400 text-right">
+                        응답일: {new Date(currentInterviewData.created_at).toLocaleString('ko-KR')}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center text-slate-500 py-8">인터뷰 응답이 없습니다.</div>
+                  )}
                 </div>
               )}
             </div>
