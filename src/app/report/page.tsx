@@ -103,7 +103,7 @@ function ReportContent() {
   return (
     <div className="flex flex-col gap-6">
       {/* 모바일 전용 가로 화면 안내 배너 */}
-      <div className="block md:hidden rounded-lg px-4 py-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 space-y-1">
+      <div className="block md:hidden rounded-lg px-4 py-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 space-y-3">
         <div>가로 화면으로 보시면 더 편하게 읽을 수 있어요 📱</div>
         <div>리포트 결과를 PDF로 저장하려면, 'PDF 다운로드' 버튼 클릭 후 열린 파일에서 공유(⬆️) → 카카오톡을 선택하세요</div>
       </div>
