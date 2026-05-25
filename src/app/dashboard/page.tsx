@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useProgress } from "@/lib/progress-context";
 import { ProgressCard } from "@/components/ProgressCard";
-import { apiGetProgress, apiGetReportStatus, apiGetPreResponse, apiGetMainResponse } from "@/lib/api";
+import { apiGetProgress, apiGetReportStatus, apiGetPreResponse, apiGetMainResponse, apiGetInterviewStatus } from "@/lib/api";
 import { getPreSurveyQuestionsCount } from "@/lib/survey-questions";
 import { useAuth } from "@/lib/auth-context";
 import { useSurveyStatus } from "@/hooks/useSurveyStatus";
@@ -16,6 +16,7 @@ export default function DashboardPage() {
   const { userId, progress, reload } = useProgress();
   const [hydrated, setHydrated] = useState(false);
   const [reportStatus, setReportStatus] = useState<'not_started' | 'completed'>('not_started');
+  const [interviewStatus, setInterviewStatus] = useState<'not_started' | 'completed'>('not_started');
   const [loadingReport, setLoadingReport] = useState(true);
   const [preAnswerCount, setPreAnswerCount] = useState(0);
   const [mainAnswerCount, setMainAnswerCount] = useState(0);
@@ -52,8 +53,12 @@ export default function DashboardPage() {
 
     setLoadingReport(true);
     try {
-      const status = await apiGetReportStatus(userId);
+      const [status, itvStatus] = await Promise.all([
+        apiGetReportStatus(userId),
+        apiGetInterviewStatus(userId),
+      ]);
       setReportStatus(status);
+      setInterviewStatus(itvStatus);
 
       const [preResponse, preTotal] = await Promise.all([
         apiGetPreResponse(userId),
@@ -180,6 +185,16 @@ export default function DashboardPage() {
               }
             }}
             disabled={mainStatus.status !== 'completed'}
+          />
+        </div>
+        <div className="md:col-span-2">
+          <ProgressCard
+            title="인터뷰"
+            description="리포트를 보고 나서 어떠셨나요? 3분 설문으로 서비스 개선에 도움을 주세요."
+            status={interviewStatus === 'completed' ? 'COMPLETED' : 'NOT_STARTED'}
+            actionLabel={interviewStatus === 'completed' ? "완료됨" : "참여하기"}
+            onAction={() => router.push("/interview")}
+            disabled={reportStatus !== 'completed' || interviewStatus === 'completed'}
           />
         </div>
       </div>

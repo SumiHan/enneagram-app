@@ -481,6 +481,66 @@ export async function apiPreviewPrompts(email: string) {
   return previewPrompts(preAnswers, mainAnswers);
 }
 
+export async function apiSubmitInterview(params: {
+  userId: string;
+  reportId: string;
+  enneagramType?: string;
+  q1: number;
+  q2: string;
+  q3: string;
+  q4: string[];
+  q5: string;
+}) {
+  const { error } = await supabase
+    .from('interview_responses')
+    .insert({
+      user_id: params.userId,
+      report_id: params.reportId,
+      enneagram_type: params.enneagramType ?? null,
+      q1_accuracy: params.q1,
+      q2_job_resonance: params.q2 || null,
+      q3_career_concern: params.q3 || null,
+      q4_job_criteria: params.q4,
+      q5_feedback: params.q5 || null,
+    });
+  if (error) throw error;
+  return { success: true };
+}
+
+export async function apiSubmitFeedback(params: {
+  userId: string;
+  reportId: string;
+  enneagramType?: string;
+  helpful: boolean;
+  resonantSection?: string;
+}) {
+  const { error } = await supabase
+    .from('report_feedback')
+    .insert({
+      user_id: params.userId,
+      report_id: params.reportId,
+      enneagram_type: params.enneagramType ?? null,
+      helpful: params.helpful,
+      resonant_section: params.resonantSection ?? null,
+    });
+  if (error) throw error;
+  return { success: true };
+}
+
+export async function apiGetInterviewStatus(userId: string): Promise<'not_started' | 'completed'> {
+  try {
+    const { data, error } = await supabase
+      .from('interview_responses')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(1);
+    if (error || !data || data.length === 0) return 'not_started';
+    return 'completed';
+  } catch {
+    return 'not_started';
+  }
+}
+
 export async function apiGetLatestReport(userId: string) {
   try {
     const { data, error } = await supabase

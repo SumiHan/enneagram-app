@@ -368,6 +368,7 @@ function EnneagramTypeCard({ typeNumber, cardStyle, characteristicsText }: { typ
   );
 }
 
+
 function ReportContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -443,7 +444,6 @@ function ReportContent() {
 
       <div className="card p-6 flex flex-col gap-4">
         {report && report.report_data && report.report_data.length > 0 ? (
-          /* ① pdf-content: 상하좌우 padding 추가 */
           <div id="pdf-content" style={{ padding: '24px' }}>
             {(() => {
               let visibleIdx = 0;
@@ -589,6 +589,7 @@ function ReportContent() {
           </div>
         )}
       </div>
+
     </div>
   );
 }

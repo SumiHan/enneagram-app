@@ -93,3 +93,13 @@ export type DbAISetting = {
   setting_value: string | null;
   updated_at: string;
 };
+
+export type DbReportFeedback = {
+  id: string;
+  user_id: string;
+  report_id: string;
+  enneagram_type: string | null;
+  helpful: boolean;
+  resonant_section: string | null;
+  created_at: string;
+};

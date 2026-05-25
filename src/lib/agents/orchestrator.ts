@@ -6,6 +6,7 @@ import {
   formatMainSurveyResponses,
 } from '../openai';
 import type { ReportSection } from '../openai';
+import jobMappingRaw from '../../data/enneagram_job_mapping.json';
 
 export type ProgressCallback = (step: string, pct: number) => void;
 
@@ -160,6 +161,26 @@ const DOMAIN_SYSTEMS: Record<string, string> = {
 - 조언의 깊이는 심리적 통찰과 실용적 실천 사이의 균형을 맞춥니다`,
 
 };
+
+// ── 워크넷 직업 데이터 RAG ────────────────────────────────────────────────────
+
+type JobFit = { type: number; name: string; score: number; grade: string };
+type JobEntry = { job_code: string; job_name: string; category: string; enneagram_fit: JobFit[] };
+
+const jobMapping = jobMappingRaw as JobEntry[];
+
+function getJobsForType(typeNumber: number, limit = 12): string {
+  const jobs = jobMapping
+    .filter(j => j.enneagram_fit[0]?.type === typeNumber && j.enneagram_fit[0]?.grade !== 'C')
+    .sort((a, b) => b.enneagram_fit[0].score - a.enneagram_fit[0].score)
+    .slice(0, limit);
+
+  if (jobs.length === 0) return '';
+
+  return jobs
+    .map(j => `- ${j.job_name} [${j.category}]`)
+    .join('\n');
+}
 
 // ── OpenRouter 호출 공통 함수 ─────────────────────────────────────────────────
 
@@ -321,7 +342,8 @@ async function runSectionWriter(
   preQuestions: any[],
   mainQuestions: any[],
   tavilyKey?: string,
-  typeData?: { name: string; keywords: string[] }
+  typeData?: { name: string; keywords: string[] },
+  typeNumber?: number
 ): Promise<ReportSection> {
   // career_guidance: Tavily로 실시간 채용 데이터 검색
   let webSearchContext = '';
@@ -380,6 +402,14 @@ async function runSectionWriter(
     ? `## 실시간 채용 시장 검색 결과 (Tavily)\n${webSearchContext}\n\n---\n\n`
     : '';
 
+  // major_based_career_path: 워크넷 검증 직업 목록 주입 (RAG)
+  const jobsList = (section.section_key === 'major_based_career_path' && typeNumber)
+    ? getJobsForType(typeNumber)
+    : '';
+  const jobDataBlock = jobsList
+    ? `## 워크넷 검증 직업 데이터 (${typeNumber}유형 적합 직무)\n한국고용정보원 워크넷 데이터 기반으로 검증된 직업 목록입니다.\n사용자의 전공·관심사에 맞게 이 목록에서 선별하여 추천하세요:\n${jobsList}\n\n---\n\n`
+    : '';
+
   const userMsg = `## 사용자 컨텍스트
 ${adminContext}
 
@@ -390,7 +420,7 @@ ${typeContext}
 
 ---
 
-${webSearchBlock}## 작성 요구사항: ${section.title}
+${jobDataBlock}${webSearchBlock}## 작성 요구사항: ${section.title}
 ${sectionPrompt}
 
 ---
@@ -558,7 +588,7 @@ export async function generateReportWithAgents(
         apiKey, s, typeContext, resolvedAdminContext,
         formattedPre, formattedMain, userName,
         preAnswers, mainAnswers, preQList, mainQList,
-        tavilyKey, resolvedTypeData
+        tavilyKey, resolvedTypeData, typeNumber
       )
     )
   );
