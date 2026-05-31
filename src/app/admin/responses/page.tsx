@@ -14,6 +14,7 @@ type UserRecord = {
   userId: string;
   email: string;
   name: string;
+  createdAt: string;
   preStatus: string;
   preAnsweredCount: number;
   preTotalCount: number;
@@ -53,6 +54,7 @@ export default function AdminResponsesPage() {
   const [currentReportData, setCurrentReportData] = useState<any>(null);
   const [currentInterviewData, setCurrentInterviewData] = useState<any>(null);
   const [emailSearch, setEmailSearch] = useState('');
+  const [dateSort, setDateSort] = useState<'asc' | 'desc' | null>(null);
 
   useEffect(() => {
     if (user?.role !== "admin") {
@@ -102,7 +104,7 @@ export default function AdminResponsesPage() {
       // Load only users with role='user' (exclude admins)
       const { data: usersData, error: usersError } = await supabase
         .from('users')
-        .select('id, email, name, role')
+        .select('id, email, name, role, created_at')
         .eq('role', 'user'); // Only load users with role='user'
       
       if (usersError) throw usersError;
@@ -199,6 +201,7 @@ export default function AdminResponsesPage() {
           userId: userData.id,
           email: userData.email,
           name: userData.name || '-',
+          createdAt: userData.created_at,
           preStatus: preStatus,
           preAnsweredCount: preAnsweredCount,
           preTotalCount: preTotalCount,
@@ -439,6 +442,16 @@ export default function AdminResponsesPage() {
     XLSX.writeFile(wb, `응답_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  const visibleRecords = useMemo(() => {
+    const filtered = records.filter(r => r.email.toLowerCase().includes(emailSearch.toLowerCase()));
+    if (!dateSort) return filtered;
+    return [...filtered].sort((a, b) => {
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateSort === 'asc' ? ta - tb : tb - ta;
+    });
+  }, [records, emailSearch, dateSort]);
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -484,6 +497,17 @@ export default function AdminResponsesPage() {
                 />
               </th>
               <th className="py-2 pr-4">이메일</th>
+              <th className="py-2 pr-4">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 font-medium hover:text-slate-900"
+                  onClick={() => setDateSort(prev => prev === 'desc' ? 'asc' : prev === 'asc' ? null : 'desc')}
+                  title="가입일 정렬"
+                >
+                  가입일
+                  <span className="text-xs">{dateSort === 'asc' ? '▲' : dateSort === 'desc' ? '▼' : '↕'}</span>
+                </button>
+              </th>
               <th className="py-2 pr-4">사전 설문</th>
               <th className="py-2 pr-4">본 설문</th>
               <th className="py-2 pr-4">리포트</th>
@@ -492,7 +516,7 @@ export default function AdminResponsesPage() {
             </tr>
           </thead>
           <tbody>
-            {records.filter(r => r.email.toLowerCase().includes(emailSearch.toLowerCase())).map((r) => (
+            {visibleRecords.map((r) => (
               <tr key={r.userId} className="border-t">
                 <td className="py-2 pr-4">
                   <input
@@ -502,8 +526,11 @@ export default function AdminResponsesPage() {
                   />
                 </td>
                 <td className="py-2 pr-4">{r.email}</td>
+                <td className="py-2 pr-4 whitespace-nowrap text-slate-600">
+                  {r.createdAt ? new Date(r.createdAt).toLocaleDateString('ko-KR') : '-'}
+                </td>
                 <td className="py-2 pr-4">
-                  <SurveyStatusCell 
+                  <SurveyStatusCell
                     status={r.preStatus as "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED"}
                     answered={r.preAnsweredCount}
                     total={r.preTotalCount}
@@ -557,7 +584,7 @@ export default function AdminResponsesPage() {
             ))}
             {records.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-6 text-center text-slate-500">
+                <td colSpan={8} className="py-6 text-center text-slate-500">
                   등록된 사용자가 없습니다.
                 </td>
               </tr>
